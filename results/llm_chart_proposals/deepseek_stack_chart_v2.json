@@ -1,0 +1,109 @@
+{
+  "task": "Stack-Cube-Franka-IK-Abs first stage",
+  "prior_source": "llm_proposed",
+  "required_observations": [
+    "end-effector pose",
+    "gripper opening",
+    "cube_1 pose",
+    "cube_2 pose"
+  ],
+  "charts": [
+    {
+      "name": "Approach Cube",
+      "goal": "Move end-effector near cube_2",
+      "invariant_set": "gripper is open, end-effector is moving towards cube_2",
+      "entry_condition": "start of task",
+      "exit_condition": "end-effector is within grasp distance of cube_2",
+      "action_template": "Move end-effector to position above cube_2 with gripper open",
+      "safety_guards": [
+        "collision detection with table",
+        "collision detection with cube_1"
+      ]
+    },
+    {
+      "name": "Grasp Cube",
+      "goal": "Grasp cube_2",
+      "invariant_set": "gripper is closing",
+      "entry_condition": "end-effector is near cube_2",
+      "exit_condition": "gripper is closed around cube_2",
+      "action_template": "Close gripper",
+      "safety_guards": [
+        "grasp force limit",
+        "collision detection with cube_1"
+      ]
+    },
+    {
+      "name": "Lift Cube",
+      "goal": "Lift cube_2",
+      "invariant_set": "gripper is closed, end-effector is moving upward",
+      "entry_condition": "gripper is closed around cube_2",
+      "exit_condition": "cube_2 is lifted to a safe height",
+      "action_template": "Move end-effector upward",
+      "safety_guards": [
+        "lift force limit",
+        "collision detection with table"
+      ]
+    },
+    {
+      "name": "Move to Target",
+      "goal": "Move end-effector above cube_1",
+      "invariant_set": "gripper is closed, end-effector is moving towards cube_1",
+      "entry_condition": "cube_2 is lifted to a safe height",
+      "exit_condition": "end-effector is above cube_1",
+      "action_template": "Move end-effector to position above cube_1",
+      "safety_guards": [
+        "collision detection with table",
+        "collision detection with cube_2"
+      ]
+    },
+    {
+      "name": "Place Cube",
+      "goal": "Place cube_2 on cube_1",
+      "invariant_set": "gripper is closed, end-effector is moving downward",
+      "entry_condition": "end-effector is above cube_1",
+      "exit_condition": "cube_2 is placed on cube_1",
+      "action_template": "Move end-effector downward",
+      "safety_guards": [
+        "placement force limit",
+        "collision detection with cube_1"
+      ]
+    },
+    {
+      "name": "Release Cube",
+      "goal": "Release cube_2",
+      "invariant_set": "gripper is opening",
+      "entry_condition": "cube_2 is placed on cube_1",
+      "exit_condition": "gripper is open",
+      "action_template": "Open gripper",
+      "safety_guards": [
+        "release force limit",
+        "collision detection with cube_1"
+      ]
+    }
+  ],
+  "edges": [
+    [
+      "Approach Cube",
+      "Grasp Cube"
+    ],
+    [
+      "Grasp Cube",
+      "Lift Cube"
+    ],
+    [
+      "Lift Cube",
+      "Move to Target"
+    ],
+    [
+      "Move to Target",
+      "Place Cube"
+    ],
+    [
+      "Place Cube",
+      "Release Cube"
+    ]
+  ],
+  "global_parameters": {
+    "overlap_radius": 0.0
+  }
+}

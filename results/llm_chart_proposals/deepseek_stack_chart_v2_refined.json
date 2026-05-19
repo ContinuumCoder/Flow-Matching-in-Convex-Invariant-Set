@@ -1,0 +1,140 @@
+{
+  "task": "Stack-Cube-Franka-IK-Abs first stage",
+  "prior_source": "llm_proposed",
+  "required_observations": [
+    "end-effector pose",
+    "gripper opening",
+    "cube_1 pose",
+    "cube_2 pose"
+  ],
+  "charts": [
+    {
+      "name": "approach_cube",
+      "goal": "Move end-effector near cube_2",
+      "invariant_set": "gripper is open, end-effector is moving towards cube_2",
+      "entry_condition": "start of task",
+      "exit_condition": "end-effector is within grasp distance of cube_2",
+      "action_template": "Move end-effector to position above cube_2 with gripper open",
+      "safety_guards": [
+        "collision detection with table",
+        "collision detection with cube_1"
+      ]
+    },
+    {
+      "name": "grasp_cube",
+      "goal": "Grasp cube_2",
+      "invariant_set": "gripper is closing",
+      "entry_condition": "end-effector is near cube_2",
+      "exit_condition": "gripper is closed around cube_2",
+      "action_template": "Close gripper",
+      "safety_guards": [
+        "grasp force limit",
+        "collision detection with cube_1"
+      ]
+    },
+    {
+      "name": "lift_cube",
+      "goal": "Lift cube_2",
+      "invariant_set": "gripper is closed, end-effector is moving upward",
+      "entry_condition": "gripper is closed around cube_2",
+      "exit_condition": "cube_2 is lifted to a safe height",
+      "action_template": "Move end-effector upward",
+      "safety_guards": [
+        "lift force limit",
+        "collision detection with table"
+      ]
+    },
+    {
+      "name": "move_to_target",
+      "goal": "Move end-effector above cube_1",
+      "invariant_set": "gripper is closed, end-effector is moving towards cube_1",
+      "entry_condition": "cube_2 is lifted to a safe height",
+      "exit_condition": "end-effector is above cube_1",
+      "action_template": "Move end-effector to position above cube_1",
+      "safety_guards": [
+        "collision detection with table",
+        "collision detection with cube_2"
+      ]
+    },
+    {
+      "name": "place_cube",
+      "goal": "Place cube_2 on cube_1",
+      "invariant_set": "gripper is closed, end-effector is moving downward",
+      "entry_condition": "end-effector is above cube_1",
+      "exit_condition": "cube_2 is placed on cube_1",
+      "action_template": "Move end-effector downward",
+      "safety_guards": [
+        "placement force limit",
+        "collision detection with cube_1"
+      ]
+    },
+    {
+      "name": "release_cube",
+      "goal": "Release cube_2",
+      "invariant_set": "gripper is opening",
+      "entry_condition": "cube_2 is placed on cube_1",
+      "exit_condition": "gripper is open",
+      "action_template": "Open gripper",
+      "safety_guards": [
+        "release force limit",
+        "collision detection with cube_1"
+      ]
+    }
+  ],
+  "edges": [
+    [
+      "approach_cube",
+      "grasp_cube"
+    ],
+    [
+      "grasp_cube",
+      "lift_cube"
+    ],
+    [
+      "lift_cube",
+      "move_to_target"
+    ],
+    [
+      "move_to_target",
+      "place_cube"
+    ],
+    [
+      "place_cube",
+      "release_cube"
+    ]
+  ],
+  "global_parameters": {
+    "overlap_radius": 0.12,
+    "cube_size_m": 0.0468,
+    "stack_lift_z": 0.26,
+    "stack_place_z": 0.095,
+    "stack_close_dwell_s": 1.2,
+    "stack_place_dwell_s": 1.2,
+    "stack_release_dwell_s": 1.6
+  },
+  "refinement_source": "fmcs_validator_v0",
+  "executable_controller_hint": {
+    "script": "experiments/isaaclab_multitask_policy_baselines.py",
+    "scenario": "stack",
+    "method": "oc_fmcs",
+    "cli_args": [
+      "--stack-overlap-threshold",
+      "0.12",
+      "--stack-lift-z",
+      "0.26",
+      "--stack-place-z",
+      "0.095",
+      "--stack-close-dwell",
+      "1.2",
+      "--stack-place-dwell",
+      "1.2",
+      "--stack-release-dwell",
+      "1.6"
+    ]
+  },
+  "validation_notes": [
+    "LLM proposal supplies task topology; FMCS validator supplies numeric overlap and dwell parameters.",
+    "Charts are simulator-validated before policy evaluation.",
+    "The interface evaluates semantic chart construction rather than end-to-end visual policy learning."
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "num_runs": 3,
+  "inputs": [
+    "results/nonconvex_toy_seed_11/metrics.json",
+    "results/nonconvex_toy_seed_13/metrics.json",
+    "results/nonconvex_toy_seed_17/metrics.json"
+  ],
+  "summary": {
+    "direct_cfm": {
+      "path_safe_rate": {
+        "mean": 0.1494140625,
+        "std": 0.018269811458857137
+      },
+      "terminal_feasible_rate": {
+        "mean": 0.9163411458333334,
+        "std": 0.013864283488962795
+      },
+      "target_hit_rate": {
+        "mean": 0.8759765625,
+        "std": 0.01242961138804478
+      },
+      "mean_outside_fraction": {
+        "mean": 0.2717447876930237,
+        "std": 0.014088935854273886
+      },
+      "mean_path_length": {
+        "mean": 5.175339380900065,
+        "std": 0.038293966652744094
+      },
+      "mean_smoothness": {
+        "mean": 3.7117151805432513e-06,
+        "std": 5.141007090736465e-07
+      }
+    },
+    "direct_projected": {
+      "path_safe_rate": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "terminal_feasible_rate": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "target_hit_rate": {
+        "mean": 0.3759765625,
+        "std": 0.03995561044038825
+      },
+      "mean_outside_fraction": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "mean_path_length": {
+        "mean": 3.238750378290812,
+        "std": 0.1712554928115277
+      },
+      "mean_smoothness": {
+        "mean": 0.00010526166928078358,
+        "std": 5.4107005946938e-06
+      }
+    },
+    "oc_fmcs": {
+      "path_safe_rate": {
+        "mean": 0.9205729166666666,
+        "std": 0.02056714713402515
+      },
+      "terminal_feasible_rate": {
+        "mean": 0.9332682291666666,
+        "std": 0.021055939620828423
+      },
+      "target_hit_rate": {
+        "mean": 0.9104817708333334,
+        "std": 0.029923138526774473
+      },
+      "mean_outside_fraction": {
+        "mean": 0.00280656300795575,
+        "std": 0.00027268273056290136
+      },
+      "mean_path_length": {
+        "mean": 5.580922444661458,
+        "std": 0.028694578089328557
+      },
+      "mean_smoothness": {
+        "mean": 1.972191133366626e-06,
+        "std": 1.444619924867355e-08
+      }
+    },
+    "oc_fmcs_chart_projected": {
+      "path_safe_rate": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "terminal_feasible_rate": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "target_hit_rate": {
+        "mean": 0.9733072916666666,
+        "std": 0.010096394804212774
+      },
+      "mean_outside_fraction": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "mean_path_length": {
+        "mean": 5.57608429590861,
+        "std": 0.027066199810080453
+      },
+      "mean_smoothness": {
+        "mean": 3.2445640651227827e-06,
+        "std": 1.45284613372307e-07
+      }
+    }
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "task": "Stack-Cube-Franka-IK-Abs first-stage cube2-on-cube1",
+  "prior_source": "heuristic_fallback",
+  "required_observations": [
+    "eef_pose",
+    "gripper_gap",
+    "cube_1_pose",
+    "cube_2_pose"
+  ],
+  "charts": [
+    {
+      "name": "approach_cube2",
+      "goal": "move above cube_2 with open gripper",
+      "invariant_set": "eef_xy within workspace; eef_z above table; gripper open",
+      "entry_condition": "episode_start",
+      "exit_condition": "||eef_pos - (cube2_pos + [0,0,0.14])|| < overlap_radius",
+      "action_template": "target_pos = cube2_anchor + [0,0,0.14]; gripper = +1",
+      "safety_guards": [
+        "z >= table_height + 0.03",
+        "stay inside robot workspace"
+      ]
+    },
+    {
+      "name": "descend_to_grasp",
+      "goal": "align fingers around cube_2",
+      "invariant_set": "eef remains in local vertical prism over cube_2",
+      "entry_condition": "inside approach_cube2 overlap",
+      "exit_condition": "||eef_pos - (cube2_pos + [0,0,0.018])|| < overlap_radius",
+      "action_template": "target_pos = cube2_anchor + [0,0,0.018]; gripper = +1",
+      "safety_guards": [
+        "slow vertical descent",
+        "do not sweep laterally near objects"
+      ]
+    },
+    {
+      "name": "close_and_lift",
+      "goal": "close gripper and lift cube_2 above table",
+      "invariant_set": "cube_2 remains near end-effector; gripper closed",
+      "entry_condition": "inside grasp overlap",
+      "exit_condition": "cube2_z - cube2_start_z > 0.05",
+      "action_template": "hold grasp pose, close, then target_pos = cube2_anchor + [0,0,0.26]",
+      "safety_guards": [
+        "maintain gripper closed",
+        "abort if cube_2 slips far from eef"
+      ]
+    },
+    {
+      "name": "transport_above_cube1",
+      "goal": "move cube_2 over cube_1 without contact",
+      "invariant_set": "cube_2 lifted; eef path stays above tabletop and away from cube_3",
+      "entry_condition": "cube_2 lifted",
+      "exit_condition": "||eef_pos - (cube1_pos + [0,0,0.20])|| < overlap_radius",
+      "action_template": "target_pos = cube1_anchor + [0,0,0.20]; gripper = -1",
+      "safety_guards": [
+        "keep cube_2 above cube_1",
+        "avoid lateral collision with cube_3"
+      ]
+    },
+    {
+      "name": "place_and_release",
+      "goal": "lower cube_2 onto cube_1 and open gripper",
+      "invariant_set": "cube_2 xy aligned with cube_1; controlled vertical release",
+      "entry_condition": "inside transport overlap",
+      "exit_condition": "xy_error(cube2,cube1) < 0.05 and |height_delta - cube_size| < 0.025",
+      "action_template": "target_pos = cube1_anchor + [0,0,0.095]; release after dwell",
+      "safety_guards": [
+        "release only after dwell",
+        "retreat vertically after opening"
+      ]
+    }
+  ],
+  "edges": [
+    [
+      "approach_cube2",
+      "descend_to_grasp"
+    ],
+    [
+      "descend_to_grasp",
+      "close_and_lift"
+    ],
+    [
+      "close_and_lift",
+      "transport_above_cube1"
+    ],
+    [
+      "transport_above_cube1",
+      "place_and_release"
+    ]
+  ],
+  "global_parameters": {
+    "overlap_radius": 0.12,
+    "cube_size_m": 0.0468,
+    "close_dwell_s": 1.2,
+    "place_dwell_s": 1.2,
+    "release_dwell_s": 1.6
+  }
+}

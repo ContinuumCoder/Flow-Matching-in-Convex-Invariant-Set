@@ -1,0 +1,255 @@
+{
+  "num_runs": 3,
+  "inputs": [
+    "results/maze_shared_seed_31/metrics.json",
+    "results/maze_shared_seed_37/metrics.json",
+    "results/maze_shared_seed_41/metrics.json"
+  ],
+  "summary": {
+    "direct_cfm.ambiguous_two_passage_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_cfm.mean_outside_fraction": {
+      "mean": 0.6727063655853271,
+      "std": 0.002580187453703989,
+      "n": 3
+    },
+    "direct_cfm.mean_path_length": {
+      "mean": 7.035689512888591,
+      "std": 0.02870484333256645,
+      "n": 3
+    },
+    "direct_cfm.mean_smoothness": {
+      "mean": 5.64065949504311e-08,
+      "std": 1.801565972000491e-08,
+      "n": 3
+    },
+    "direct_cfm.middle_obstacle_cross_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_cfm.path_safe_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_cfm.route_adherence_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_cfm.target_hit_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_cfm.terminal_feasible_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_projected.ambiguous_two_passage_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_projected.mean_outside_fraction": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_projected.mean_path_length": {
+      "mean": 1.1856261094411213,
+      "std": 0.009466991448684013,
+      "n": 3
+    },
+    "direct_projected.mean_smoothness": {
+      "mean": 0.00012674681784119457,
+      "std": 7.242536490246231e-07,
+      "n": 3
+    },
+    "direct_projected.middle_obstacle_cross_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_projected.path_safe_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_projected.route_adherence_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_projected.target_hit_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "direct_projected.terminal_feasible_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "efficiency.direct_params": {
+      "mean": 53762.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "efficiency.direct_train_seconds": {
+      "mean": 2.6298027485609055,
+      "std": 0.09868355486631772,
+      "n": 3
+    },
+    "efficiency.eval_samples_per_second.direct_cfm": {
+      "mean": 89783.42610057598,
+      "std": 1872.9632470313347,
+      "n": 3
+    },
+    "efficiency.eval_samples_per_second.direct_projected": {
+      "mean": 19771.061944462213,
+      "std": 339.3831960227365,
+      "n": 3
+    },
+    "efficiency.eval_samples_per_second.shared_ocfmcs": {
+      "mean": 22333.480558109113,
+      "std": 216.80643312686837,
+      "n": 3
+    },
+    "efficiency.eval_samples_per_second.shared_ocfmcs_chart_projected": {
+      "mean": 10069.117772262834,
+      "std": 97.32701508294122,
+      "n": 3
+    },
+    "efficiency.eval_seconds.direct_cfm": {
+      "mean": 0.01711517944931984,
+      "std": 0.00035209226823720575,
+      "n": 3
+    },
+    "efficiency.eval_seconds.direct_projected": {
+      "mean": 0.077712365736564,
+      "std": 0.0013436691525234676,
+      "n": 3
+    },
+    "efficiency.eval_seconds.shared_ocfmcs": {
+      "mean": 0.06878210852543513,
+      "std": 0.0006636527637640639,
+      "n": 3
+    },
+    "efficiency.eval_seconds.shared_ocfmcs_chart_projected": {
+      "mean": 0.1525598280131817,
+      "std": 0.0014680144054512454,
+      "n": 3
+    },
+    "efficiency.peak_cuda_memory_mb": {
+      "mean": 30.5546875,
+      "std": 0.0,
+      "n": 3
+    },
+    "efficiency.shared_params": {
+      "mean": 56418.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "efficiency.shared_train_seconds": {
+      "mean": 4.547370145718257,
+      "std": 0.08875788680021707,
+      "n": 3
+    },
+    "shared_ocfmcs.ambiguous_two_passage_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "shared_ocfmcs.mean_outside_fraction": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "shared_ocfmcs.mean_path_length": {
+      "mean": 8.232516288757324,
+      "std": 0.025662846892334938,
+      "n": 3
+    },
+    "shared_ocfmcs.mean_smoothness": {
+      "mean": 4.7089849734523646e-05,
+      "std": 2.6072882245850218e-08,
+      "n": 3
+    },
+    "shared_ocfmcs.middle_obstacle_cross_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "shared_ocfmcs.path_safe_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "shared_ocfmcs.route_adherence_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "shared_ocfmcs.target_hit_rate": {
+      "mean": 0.9676649570465088,
+      "std": 0.03033383918834978,
+      "n": 3
+    },
+    "shared_ocfmcs.terminal_feasible_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "shared_ocfmcs_chart_projected.ambiguous_two_passage_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "shared_ocfmcs_chart_projected.mean_outside_fraction": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "shared_ocfmcs_chart_projected.mean_path_length": {
+      "mean": 8.232390721638998,
+      "std": 0.0257158851402837,
+      "n": 3
+    },
+    "shared_ocfmcs_chart_projected.mean_smoothness": {
+      "mean": 4.707565676653758e-05,
+      "std": 5.482058664096818e-09,
+      "n": 3
+    },
+    "shared_ocfmcs_chart_projected.middle_obstacle_cross_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "shared_ocfmcs_chart_projected.path_safe_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "shared_ocfmcs_chart_projected.route_adherence_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n": 3
+    },
+    "shared_ocfmcs_chart_projected.target_hit_rate": {
+      "mean": 0.994140644868215,
+      "std": 0.00783056305732417,
+      "n": 3
+    },
+    "shared_ocfmcs_chart_projected.terminal_feasible_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n": 3
+    }
+  }
+}

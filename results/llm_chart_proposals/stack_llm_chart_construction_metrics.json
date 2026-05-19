@@ -1,0 +1,101 @@
+{
+  "raw_chart": {
+    "path": "results/llm_chart_proposals/deepseek_stack_chart_v2.json",
+    "chart_count": 6,
+    "edge_count": 5,
+    "topology_hits": {
+      "approach": true,
+      "grasp": true,
+      "lift": true,
+      "move": true,
+      "place": true,
+      "release": true
+    },
+    "topology_score": 6,
+    "topology_total": 6,
+    "ordered_edges": 5,
+    "ordered_edges_total": 5,
+    "geometry_hits": {
+      "overlap_radius": false,
+      "stack_lift_z": false,
+      "stack_place_z": false,
+      "stack_close_dwell_s": false,
+      "stack_place_dwell_s": false,
+      "stack_release_dwell_s": false
+    },
+    "geometry_score": 0,
+    "geometry_total": 6,
+    "executable_atlas": false
+  },
+  "refined_chart": {
+    "path": "results/llm_chart_proposals/deepseek_stack_chart_v2_refined.json",
+    "chart_count": 6,
+    "edge_count": 5,
+    "topology_hits": {
+      "approach": true,
+      "grasp": true,
+      "lift": true,
+      "move": true,
+      "place": true,
+      "release": true
+    },
+    "topology_score": 6,
+    "topology_total": 6,
+    "ordered_edges": 5,
+    "ordered_edges_total": 5,
+    "geometry_hits": {
+      "overlap_radius": true,
+      "stack_lift_z": true,
+      "stack_place_z": true,
+      "stack_close_dwell_s": true,
+      "stack_place_dwell_s": true,
+      "stack_release_dwell_s": true
+    },
+    "geometry_score": 6,
+    "geometry_total": 6,
+    "executable_atlas": true
+  },
+  "stack_metrics": "results/isaaclab_multitask_policy_baselines_v4/stack_controller_baselines/metrics.json",
+  "rows": [
+    {
+      "name": "Direct horizon generator",
+      "source": "no chart atlas",
+      "topology": "0/6",
+      "geometry": "--",
+      "executable": "yes",
+      "stack_success": 0.0,
+      "cube2_lift_success": 0.0,
+      "policy_ms_per_env_step": 0.026576224222986236
+    },
+    {
+      "name": "DeepSeek raw chart",
+      "source": "LLM only",
+      "topology": "6/6",
+      "geometry": "0/6",
+      "executable": "no",
+      "stack_success": null,
+      "cube2_lift_success": null,
+      "policy_ms_per_env_step": null
+    },
+    {
+      "name": "DeepSeek + FMCS validator (ours)",
+      "source": "LLM topology + geometric validator",
+      "topology": "6/6",
+      "geometry": "6/6",
+      "executable": "yes",
+      "stack_success": 0.7916666865348816,
+      "cube2_lift_success": 0.8333333730697632,
+      "policy_ms_per_env_step": 0.09956777858961788
+    },
+    {
+      "name": "Same atlas + MPPI-FSM",
+      "source": "chart-conditioned sampling ablation",
+      "topology": "6/6",
+      "geometry": "6/6",
+      "executable": "yes",
+      "stack_success": 0.75,
+      "cube2_lift_success": 0.875,
+      "policy_ms_per_env_step": 0.13418462541368273
+    }
+  ]
+}
