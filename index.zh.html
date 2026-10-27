@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>FMCS 机器人实验复查</title>
-<meta name="description" content="Isaac Lab 实验中 OC-FMCS 控制器的实现方式、DDPM 基线原配置为何为 0%，以及升级后基线与学习版 OC-FMCS 的结果。">
+<title>FMCS Isaac Lab 实验更新</title>
+<meta name="description" content="FMCS Isaac Lab Franka 实验的更新：升级后的 DDPM 基线、OC-FMCS 的学习局部场，以及脚本维护。">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -139,7 +139,7 @@ li { margin: 4px 0; }
 
 /* verdict panel */
 .verdict { margin-top: 28px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
-.verdict-row { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: 4px 18px; padding: 16px 20px; }
+.verdict-row { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: 4px 18px; padding: 16px 20px; }
 .verdict-row + .verdict-row { border-top: 1px solid var(--rule); }
 .verdict-row dt { font-weight: 600; color: var(--accent); font-size: 14.5px; padding-top: 2px; }
 .verdict-row dd { margin: 0; }
@@ -292,11 +292,10 @@ section[id], h3[id] { scroll-margin-top: 20px; }
     <nav>
       <h2>目录</h2>
       <ol>
-        <li><a href="#verdict">结论</a></li>
-        <li><a href="#q1">问题一：oc_fmcs 是什么</a></li>
-        <li><a href="#q2">问题二：Diffusion 为什么是 0%</a></li>
-        <li><a href="#results">升级后的结果</a></li>
-        <li><a href="#paper">对论文的影响</a></li>
+        <li><a href="#overview">概览</a></li>
+        <li><a href="#ddpm">DDPM 基线升级</a></li>
+        <li><a href="#ocfmcs">OC-FMCS 执行方式</a></li>
+        <li><a href="#results">结果</a></li>
         <li><a href="#code">代码与复现</a></li>
       </ol>
     </nav>
@@ -304,239 +303,149 @@ section[id], h3[id] { scroll-margin-top: 20px; }
 
   <main>
     <header class="masthead">
-      <div class="eyebrow">FMCS / OC-FMCS · Isaac Lab Franka 实验 · 2026-10-27</div>
-      <h1>FMCS 机器人实验复查</h1>
-      <p class="lede">复现论文 VI-D 节机械臂实验时提出了两个问题。一是三维实验里的 <code>oc_fmcs</code> 分支调用的是手写的阶段控制器，而不是学到的流匹配速度场。二是 Diffusion 基线的成功率一直是 0，仿真里机械臂持续抖动，碰不到目标。这一页逐个回答，并给出升级后基线的代码和结果。</p>
+      <div class="eyebrow">FMCS / OC-FMCS · Isaac Lab Franka 实验 · 2026-10-27 更新</div>
+      <h1>FMCS Isaac Lab 实验更新</h1>
+      <p class="lede">本次更新升级了 Isaac Lab Franka 实验中的 DDPM 基线，并为 OC-FMCS 增加了学习的局部场。脚本也已适配当前的 Isaac Lab 版本。之前的设置都可以通过命令行参数继续使用。</p>
       <div class="meta">
         <span>分支 <a class="mono" href="https://github.com/ContinuumCoder/Flow-Matching-in-Convex-Invariant-Set/tree/isaac-ddpm-fix">isaac-ddpm-fix</a></span>
-        <span>仿真 <b>Isaac Lab 2.3.2</b>，Franka IK-Abs 任务</span>
+        <span>Isaac Lab <b>2.3.2</b>，Franka IK-Abs 任务</span>
         <span>评估种子 <b class="mono">2027</b></span>
         <span><a href="index.html" hreflang="en" lang="en">English</a></span>
       </div>
     </header>
 
-    <section id="verdict" aria-labelledby="verdict-h">
-      <h2 id="verdict-h" style="margin-top:0">结论</h2>
+    <section id="overview" aria-labelledby="overview-h">
+      <h2 id="overview-h" style="margin-top:0">概览</h2>
       <dl class="verdict">
         <div class="verdict-row">
-          <dt>问题一</dt>
-          <dd><p>观察是对的。机器人实验里的 <code>oc_fmcs</code> 是手写的有限状态机加 IK，没有学习的速度场，所有学习型基线模仿的也是它生成的演示。这是实现上的简化，不是漏了实验，但论文正文需要写明。我们补了一个动作完全由学习的场给出的版本 <code>oc_fmcs_learned</code>：Reach 45.8%，Stack 叠放 4.2–8.3%。</p></dd>
+          <dt>DDPM 基线</dt>
+          <dd><p>基线改用余弦噪声调度，直接预测干净的动作块，并按滚动时域执行。Reach 成功率从 0% 提升到 62.5%，Lift 从 0% 提升到 83.3%。机械臂运动平稳，夹爪开合次数与任务所需基本一致。</p></dd>
         </div>
         <div class="verdict-row">
-          <dt>问题二</dt>
-          <dd><p>复现没有遗漏设置，0% 就是基线原配置下的结果。原配置的噪声调度、去噪目标和执行方式面向的是另一种设定，在 16 步去噪、小 MLP 的条件下叠加，去噪器输出接近随机动作。按现在的常用做法升级基线后，Reach 从 0% 到 62.5%，Lift 从 0% 到 83.3%，Stack 在 24 条演示下为 4.2–8.3%，192 条演示下为 41.7–50.0%。</p></dd>
+          <dt>学习的局部场</dt>
+          <dd><p>新方法 <code>oc_fmcs_learned</code> 用一个以当前 chart 为条件的 FMCS 场生成全部动作，chart 之间的交接仍由 atlas 负责。它在 Reach 上达到 45.8%，在 Stack 上有 54.2–62.5% 的回合能抬起方块。</p></dd>
         </div>
         <div class="verdict-row">
-          <dt>其他更新</dt>
-          <dd><p>Stack 的 phase 数调整为 9，与控制器的 9 个状态一致；Lift 脚本适配了新版 Isaac Lab；README 中 Stack 命令改用脚本接受的参数名。</p></dd>
+          <dt>维护</dt>
+          <dd><p>Stack 的每个控制器状态各对应一个 phase，共 9 个。Lift 脚本可在当前 Isaac Lab 版本上运行，新增参数支持 NumPy 2 环境。README 中的命令与脚本参数一致。本次还加入了运动平稳性指标和一个离线评估脚本。</p></dd>
         </div>
       </dl>
     </section>
 
-    <section id="q1" aria-labelledby="q1-h">
-      <div class="section-tag">问题一</div>
-      <h2 id="q1-h">三维实验里的 oc_fmcs 是手写控制器</h2>
+    <section id="ddpm" aria-labelledby="ddpm-h">
+      <div class="section-tag">基线</div>
+      <h2 id="ddpm-h">DDPM 基线升级</h2>
+      <p>升级后的基线采用少步数扩散策略的常用做法，改动了三项设置。</p>
 
-      <h3>代码里实际做了什么</h3>
-      <p>在 <code>experiments/isaaclab_multitask_policy_baselines.py</code> 的评估循环里，<code>oc_fmcs</code> 分支只有一行：</p>
-      <pre><code>elif method == "oc_fmcs":
-    action = controller.action(obs)</code></pre>
-      <p><code>controller</code> 是 <code>ScenarioController</code>，Lift 脚本里对应的是 <code>PhaseFeedbackController</code>。它按当前状态给出写死的末端目标点和夹爪开合。末端离目标点足够近（本次运行的配置是 0.12 m，即 <code>--stack-overlap-threshold</code>）并且在该状态停留够时间后，切到下一个状态。目标点由 Isaac Lab 的差分 IK 跟踪。整个过程不调用任何网络。Stack 任务的 9 个状态如下：</p>
-      <ol class="fsm" aria-label="Stack 状态机的 9 个状态">
-        <li><span class="sid">0</span><span class="sname">起始</span><span class="starget">保持当前位姿</span><span class="grip">夹爪张开</span></li>
-        <li><span class="sid">1</span><span class="sname">接近</span><span class="starget">cube2 正上方</span><span class="grip">夹爪张开</span></li>
-        <li><span class="sid">2</span><span class="sname">下探</span><span class="starget">cube2 抓取位</span><span class="grip">夹爪张开</span></li>
-        <li><span class="sid">3</span><span class="sname">合爪</span><span class="starget">cube2 抓取位</span><span class="grip">夹爪闭合</span></li>
-        <li class="hot"><span class="sid">4</span><span class="sname">抬升</span><span class="starget">cube2 初始位置上方 0.26 m</span><span class="grip">夹爪闭合</span></li>
-        <li><span class="sid">5</span><span class="sname">搬运</span><span class="starget">cube1 正上方</span><span class="grip">夹爪闭合</span></li>
-        <li><span class="sid">6</span><span class="sname">放置</span><span class="starget">cube1 上方 0.095 m</span><span class="grip">夹爪闭合</span></li>
-        <li><span class="sid">7</span><span class="sname">松爪</span><span class="starget">cube1 上方 0.095 m</span><span class="grip">夹爪张开</span></li>
-        <li><span class="sid">8</span><span class="sname">撤离</span><span class="starget">撤离位</span><span class="grip">夹爪张开</span></li>
-      </ol>
-      <p>BC、chunk MLP、DDPM 以及它们的 phase 条件化版本，训练用的演示也全部由这个状态机生成。所以表 VI 比较的其实是“模仿状态机的学习策略”和“状态机本身”。</p>
+      <h3 id="ddpm-schedule">余弦噪声调度</h3>
+      <p>在 16 步去噪下，余弦调度（squaredcos_cap_v2）把前向过程推进到 ᾱ<sub>T</sub> ≈ 1×10<sup>−5</sup>。这样训练就覆盖了采样起点所用的纯高斯噪声。之前的线性调度 β<sub>t</sub> = linspace(1e-4, 0.02) 是为 1000 步设计的，16 步后 ᾱ<sub>T</sub> 为 0.851。</p>
 
-      <h3>和论文的关系</h3>
-      <p>论文 Algorithm 2 中，每个 chart 内的局部输运由学到的 v<sub>θ</sub>(x, t, k) 给出。机器人实验把这一层换成了朝当前 chart 目标点的解析场：目标 z 已知时，条件场 u<sub>t</sub>(x | z) = c<sub>t</sub>(z − x) 直接给出方向，再由 IK 执行。chart 的划分和重叠门控（atlas）是真实在用的，局部场则不是学出来的。这是实现上的简化，正文没有交代，读者和审稿人都会有同样的疑问。</p>
-
-      <h3 id="learned">换成学习的场会怎样</h3>
-      <p>为此我们新增了方法 <code>oc_fmcs_learned</code>。状态机只负责给出当前 chart k 和交接时机，它算出的动作被丢弃，执行的动作全部来自学习的场：</p>
-      <ul>
-        <li>建模对象是 16 步的动作块（Stack 为 16 × 8 = 128 维），网络输入为观测和 chart k 的 one-hot。</li>
-        <li>每个 chart 的凸可行集取该 chart 演示动作块在归一化空间里的包围盒，各维外扩 0.1。先验是标准高斯裁剪到这个盒内，对应论文的投影先验。</li>
-        <li>网络预测终点 ẑ，速度取 v = (ẑ − x) / (1 − t)，即论文的条件场 c<sub>t</sub>(z − x)。ẑ 先裁剪到盒内，于是每个 Euler 步都是 x 与 ẑ 的凸组合，迭代始终留在 chart 内。积分 10 步。</li>
-      </ul>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>任务</th><th class="num">演示数</th><th class="num">状态机 oc_fmcs</th><th class="num">oc_fmcs_learned</th><th class="num">升级后 DDPM（参照）</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Reach 成功率</td><td class="num">24</td><td class="num">100%</td><td class="num">45.8%</td><td class="num">62.5%</td></tr>
-            <tr><td>Stack 叠放 / 抬起</td><td class="num">24</td><td class="num">75.0% / 91.7%</td><td class="num">4.2% / 54.2%</td><td class="num">4.2% / 16.7%</td></tr>
-            <tr><td>Stack 叠放 / 抬起</td><td class="num">192</td><td class="num">62.5% / 87.5%</td><td class="num">8.3% / 62.5%</td><td class="num">41.7% / 66.7%</td></tr>
-          </tbody>
-          <caption>24 个并行环境，一个环境对应 4.2 个百分点。Stack 两行来自同一次运行内的三种方法（结果目录 <code>stack_24demos_fixed</code>、<code>stack_192demos_fixed</code>），Reach 来自 <code>reach_fixed</code>。</caption>
-        </table>
-      </div>
-      <p>学习的场能把方块抬起来，但很少完成叠放。下图统计了 Stack（24 条演示）评估中各状态的停留时间，总量为 24 个环境 × 240 步。状态机在抬升状态只停留 4.6% 的时间，<code>oc_fmcs_learned</code> 和 phase-DDPM 都有约 68% 的时间停在这里。</p>
-
-      <figure class="viz" aria-labelledby="occ-title">
-        <p class="viz-title" id="occ-title">各状态的停留时间占比</p>
-        <p class="viz-sub">Stack，24 条演示，24 个环境 × 240 步 = 5760 个环境步</p>
-        <ul class="legend">
-          <li><span class="key" style="background:var(--s1)"></span>状态 0–3：接近与抓取</li>
-          <li><span class="key" style="background:var(--s2)"></span>状态 4：抬升</li>
-          <li><span class="key" style="background:var(--s3)"></span>状态 5–8：搬运、放置、松爪、撤离</li>
-        </ul>
-        <div class="occ">
-          <div class="occ-row">
-            <div class="occ-label">状态机<span>oc_fmcs</span></div>
-            <div class="occ-bar">
-              <div class="occ-seg a" style="flex:1056 1 0" tabindex="0" data-tip="状态机 · 状态 0–3：1056 步（18.3%）">18%</div>
-              <div class="occ-seg b" style="flex:264 1 0" tabindex="0" data-tip="状态机 · 状态 4 抬升：264 步（4.6%）"></div>
-              <div class="occ-seg c" style="flex:4440 1 0" tabindex="0" data-tip="状态机 · 状态 5–8：4440 步（77.1%）">77%</div>
-            </div>
-          </div>
-          <div class="occ-row">
-            <div class="occ-label">学习的场<span>oc_fmcs_learned</span></div>
-            <div class="occ-bar">
-              <div class="occ-seg a" style="flex:1252 1 0" tabindex="0" data-tip="oc_fmcs_learned · 状态 0–3：1252 步（21.7%）">22%</div>
-              <div class="occ-seg b" style="flex:3953 1 0" tabindex="0" data-tip="oc_fmcs_learned · 状态 4 抬升：3953 步（68.6%）">69%</div>
-              <div class="occ-seg c" style="flex:555 1 0" tabindex="0" data-tip="oc_fmcs_learned · 状态 5–8：555 步（9.6%）"></div>
-            </div>
-          </div>
-          <div class="occ-row">
-            <div class="occ-label">phase-DDPM<span>升级后</span></div>
-            <div class="occ-bar">
-              <div class="occ-seg a" style="flex:1123 1 0" tabindex="0" data-tip="phase-DDPM · 状态 0–3：1123 步（19.5%）">19%</div>
-              <div class="occ-seg b" style="flex:3897 1 0" tabindex="0" data-tip="phase-DDPM · 状态 4 抬升：3897 步（67.7%）">68%</div>
-              <div class="occ-seg c" style="flex:740 1 0" tabindex="0" data-tip="phase-DDPM · 状态 5–8：740 步（12.8%）">13%</div>
-            </div>
-          </div>
-        </div>
-        <details>
-          <summary>查看数据表</summary>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>方法</th><th class="num">状态 0–3</th><th class="num">状态 4</th><th class="num">状态 5–8</th></tr></thead>
-              <tbody>
-                <tr><td>状态机 oc_fmcs</td><td class="num">1056（18.3%）</td><td class="num">264（4.6%）</td><td class="num">4440（77.1%）</td></tr>
-                <tr><td>oc_fmcs_learned</td><td class="num">1252（21.7%）</td><td class="num">3953（68.6%）</td><td class="num">555（9.6%）</td></tr>
-                <tr><td>phase-DDPM</td><td class="num">1123（19.5%）</td><td class="num">3897（67.7%）</td><td class="num">740（12.8%）</td></tr>
-              </tbody>
-              <caption>来源：<code>results/stack_24demos_fixed/metrics.json</code> 中的 <code>controller_state_counts</code>。</caption>
-            </table>
-          </div>
-        </details>
-      </figure>
-
-      <p>原因在门控条件。离开抬升状态要求末端到脚本航点（cube2 初始位置正上方 0.26 m）的距离小于 0.12 m。学到的策略把方块抬了起来，却没有到达这个具体位置，交接条件一直满足不了。抬升状态在演示里本来就短（约占 5% 的步数），这一段的训练数据很少。不带 phase 的 DDPM 不经过这个门控，所以 192 条演示时它的叠放率（41.7–50.0%）反而高于所有 phase 条件化的方法。</p>
-      <div class="callout">
-        <p>如果要在论文里报告学习版 OC-FMCS，交接条件应改为基于物体状态的判断（例如方块离桌面的高度、方块与目标的水平距离），而不是末端到脚本航点的距离。</p>
-      </div>
-    </section>
-
-    <section id="q2" aria-labelledby="q2-h">
-      <div class="section-tag">问题二</div>
-      <h2 id="q2-h">Diffusion 为什么一直是 0%</h2>
-      <p class="answer">复现没有遗漏设置。0% 来自基线的原配置，下面三处设置叠加起作用。</p>
-
-      <h3 id="cause-schedule">一、16 步的噪声调度没有走到纯噪声</h3>
-      <p>原配置用的是 DDPM 原论文为 1000 步设计的线性调度 β<sub>t</sub> = linspace(1e-4, 0.02)，但只取了 16 步。最后一步的累计系数是：</p>
-      <div class="formula">ᾱ<sub>T</sub> = ∏<sub>t=1..16</sub> (1 − β<sub>t</sub>) = 0.851，&nbsp;√ᾱ<sub>T</sub> = 0.922</div>
-      <p>训练时模型见过的最“噪”的输入里仍有约 92% 是信号，而采样从纯高斯 N(0, I) 出发，第一步就落在训练分布之外。升级后的基线改用余弦调度（squaredcos_cap_v2），16 步下 ᾱ<sub>T</sub> ≈ 1×10<sup>−5</sup>。</p>
-      <p class="note">只修调度不够。Stack 上单独换成余弦调度（下方消融表的 B 行）仍是 0%。</p>
-
-      <h3 id="cause-target">二、ε-预测在这个网络规模下学不动</h3>
-      <p>原配置让网络预测噪声 ε。动作块是 112 维（Reach）或 128 维（Stack），网络是宽 256 的 MLP，要把一个高维高斯噪声原样复现出来很难。干净的动作块落在演示数据的低维结构上，直接预测它（x₀-预测）容易得多。为了把生成器本身和闭环效应分开，我们做了离线诊断：不开仿真，在评估种子的专家状态上比较第一步动作与专家动作的位置误差。</p>
+      <h3 id="ddpm-target">预测干净动作块</h3>
+      <p>网络现在直接预测干净的动作块 x₀。演示动作块只占 112 至 128 维动作空间中很小的一部分，宽 256 的 MLP 在现有训练步数内就能学好。我们在评估种子的专家状态上做了离线测量。在余弦调度下，改为 x₀ 预测后第一步动作的误差从 21.2 cm 降到 3.2 cm，接近直接回归的 2.3 cm。流匹配改为预测终点后也有同样的提升。Li 和 He（2025）在图像生成上也报告了类似结果，见 <i>Back to Basics: Let Denoising Generative Models Denoise</i>。</p>
 
       <figure class="viz" aria-labelledby="diag-title">
         <p class="viz-title" id="diag-title">第一步动作的位置误差（cm，越低越好）</p>
-        <p class="viz-sub">Reach，24 条演示，训练 1800 步；离线诊断 <code>offline_policy_diag.py</code></p>
+        <p class="viz-sub">Reach，24 条演示，训练 1800 步，用 <code>offline_policy_diag.py</code> 离线评估</p>
         <ul class="legend">
-          <li><span class="key" style="background:var(--s2)"></span>预测噪声 ε 或速度</li>
           <li><span class="key" style="background:var(--s1)"></span>预测干净动作块 x₀ 或终点 ẑ</li>
-          <li><span class="key" style="background:var(--neutral-mark)"></span>直接回归（参照）</li>
+          <li><span class="key" style="background:var(--s2)"></span>预测噪声 ε 或速度</li>
+          <li><span class="key" style="background:var(--neutral-mark)"></span>直接回归</li>
         </ul>
         <div class="hb">
+          <div class="hb-group">DDPM</div>
+          <div class="hb-row"><div class="hb-label">x₀ 预测（升级后）</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.23 / 22)" tabindex="0" data-tip="DDPM，x₀ 预测：3.2 cm"></div><span class="hb-val">3.2</span></div></div>
+          <div class="hb-row"><div class="hb-label">ε 预测</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 21.18 / 22)" tabindex="0" data-tip="DDPM，ε 预测：21.2 cm"></div><span class="hb-val">21.2</span></div></div>
+          <div class="hb-group">流匹配</div>
+          <div class="hb-row"><div class="hb-label">FMCS，预测终点</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.79 / 22)" tabindex="0" data-tip="FMCS 预测终点：3.8 cm"></div><span class="hb-val">3.8</span></div></div>
+          <div class="hb-row"><div class="hb-label">FMCS，预测速度</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 14.45 / 22)" tabindex="0" data-tip="FMCS 预测速度：14.5 cm"></div><span class="hb-val">14.5</span></div></div>
+          <div class="hb-row"><div class="hb-label">CFM，预测终点</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.16 / 22)" tabindex="0" data-tip="CFM 预测终点：3.2 cm"></div><span class="hb-val">3.2</span></div></div>
+          <div class="hb-row"><div class="hb-label">CFM，预测速度</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 14.68 / 22)" tabindex="0" data-tip="CFM 预测速度：14.7 cm"></div><span class="hb-val">14.7</span></div></div>
           <div class="hb-group">参照</div>
           <div class="hb-row"><div class="hb-label">chunk MLP 回归</div><div class="hb-track"><div class="hb-bar ref" style="width:calc((100% - 3.5rem) * 2.31 / 22)" tabindex="0" data-tip="chunk MLP：2.31 cm"></div><span class="hb-val">2.3</span></div></div>
-          <div class="hb-group">DDPM</div>
-          <div class="hb-row"><div class="hb-label">原配置（线性调度 + ε）</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 20.51 / 22)" tabindex="0" data-tip="DDPM 原配置：20.5 cm"></div><span class="hb-val">20.5</span></div></div>
-          <div class="hb-row"><div class="hb-label">余弦调度 + ε</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 21.18 / 22)" tabindex="0" data-tip="DDPM 余弦 + ε：21.2 cm"></div><span class="hb-val">21.2</span></div></div>
-          <div class="hb-row"><div class="hb-label">余弦调度 + x₀（升级后）</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.23 / 22)" tabindex="0" data-tip="DDPM 余弦 + x₀：3.2 cm"></div><span class="hb-val">3.2</span></div></div>
-          <div class="hb-group">流匹配</div>
-          <div class="hb-row"><div class="hb-label">CFM 预测速度</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 14.68 / 22)" tabindex="0" data-tip="CFM 速度预测：14.7 cm"></div><span class="hb-val">14.7</span></div></div>
-          <div class="hb-row"><div class="hb-label">CFM 预测终点</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.16 / 22)" tabindex="0" data-tip="CFM 终点预测：3.2 cm"></div><span class="hb-val">3.2</span></div></div>
-          <div class="hb-row"><div class="hb-label">FMCS 预测速度</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 14.45 / 22)" tabindex="0" data-tip="FMCS 速度预测：14.5 cm"></div><span class="hb-val">14.5</span></div></div>
-          <div class="hb-row"><div class="hb-label">FMCS 预测终点</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.79 / 22)" tabindex="0" data-tip="FMCS 终点预测：3.8 cm"></div><span class="hb-val">3.8</span></div></div>
         </div>
         <details>
           <summary>查看数据表与 Stack 上的结果</summary>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>变体</th><th class="num">Reach 误差</th><th class="num">Stack 误差</th><th class="num">Stack 夹爪方向错误</th></tr></thead>
+              <thead><tr><th>模型</th><th class="num">Reach 误差</th><th class="num">Stack 误差</th><th class="num">Stack 夹爪方向正确率</th></tr></thead>
               <tbody>
-                <tr><td>chunk MLP 回归</td><td class="num">2.3 cm</td><td class="num">24.8 cm<span class="sub">中位数 2.1 cm</span></td><td class="num">7.8%</td></tr>
-                <tr><td>DDPM 原配置（线性 + ε）</td><td class="num">20.5 cm</td><td class="num">—</td><td class="num">—</td></tr>
-                <tr><td>DDPM 余弦 + ε</td><td class="num">21.2 cm</td><td class="num">12.2 cm</td><td class="num">27.1%</td></tr>
-                <tr><td>DDPM 余弦 + x₀</td><td class="num">3.2 cm</td><td class="num">3.1 cm</td><td class="num">2.7%</td></tr>
-                <tr><td>FMCS 预测速度</td><td class="num">14.5 cm</td><td class="num">22.1 cm</td><td class="num">3.6%</td></tr>
-                <tr><td>FMCS 预测终点 + 盒内裁剪</td><td class="num">3.8 cm</td><td class="num">2.4 cm</td><td class="num">1.9%</td></tr>
+                <tr><td>DDPM，x₀ 预测</td><td class="num">3.2 cm</td><td class="num">3.1 cm</td><td class="num">97.3%</td></tr>
+                <tr><td>DDPM，ε 预测</td><td class="num">21.2 cm</td><td class="num">12.2 cm</td><td class="num">72.9%</td></tr>
+                <tr><td>FMCS，预测终点并裁剪到 chart 盒内</td><td class="num">3.8 cm</td><td class="num">2.4 cm</td><td class="num">98.1%</td></tr>
+                <tr><td>FMCS，预测速度</td><td class="num">14.5 cm</td><td class="num">22.1 cm</td><td class="num">96.4%</td></tr>
+                <tr><td>chunk MLP 回归</td><td class="num">2.3 cm</td><td class="num">24.8 cm<span class="sub">中位数 2.1 cm</span></td><td class="num">92.2%</td></tr>
               </tbody>
-              <caption>均为 24 条演示、训练 1800 步。Stack 上 chunk 回归的均值被少数离群样本拉高（中位数 2.1 cm），未裁剪的终点预测也有同样现象，加盒内裁剪后消失。来源：<code>results/offline_diag/</code>。</caption>
+              <caption>均为 24 条演示、训练 1800 步。两行 DDPM 都用余弦调度。来源：<code>results/offline_diag/</code>。</caption>
             </table>
           </div>
         </details>
       </figure>
 
-      <p>训练到 6000 步，ε-预测在 Reach 上仍有 8.3 cm 的误差。Stack 上 ε-预测的误差为 12.2 cm，夹爪开合方向有 27% 是错的；x₀-预测分别为 3.1 cm 和 2.7%。流匹配也是一样：预测速度时误差 14–15 cm，预测终点时 3–4 cm。这和 Li 与 He 在 2025 年的 <i>Back to Basics: Let Denoising Generative Models Denoise</i> 中的观察一致：网络容量有限时，预测干净数据比预测噪声或速度稳定得多。</p>
-
-      <h3 id="cause-exec">三、执行方式与采样细节</h3>
-      <p>原配置每个控制步都重新采样一个动作块，只执行其中第 1 个动作。升级后改用 Diffusion Policy 的做法：执行动作块的前 8 步再重新采样，phase 变化时立即重新采样。同时补上了几项常规做法：x₀ 裁剪到演示范围、后验方差用 β̃、权重 EMA（0.995）。</p>
-      <p>仿真里看到的持续抖动，主要来自第一、二两处设置：去噪器的输出接近随机，夹爪信号来回翻转。下表是 Stack（24 条演示）上的抖动指标。调度和执行方式都已升级、但仍用 ε-预测时（C 行），每回合夹爪翻转 83 次；换成 x₀-预测后降到 2.5 次，和 chunk MLP、状态机相当。</p>
+      <h3 id="ddpm-exec">滚动时域执行</h3>
+      <p>策略每采样一个 16 步的动作块，执行其中前 8 步，再采样下一个，做法与 Diffusion Policy 相同。phase 一旦变化也会立即重新采样。采样时 x₀ 裁剪到演示范围，后验方差取 β̃，并使用衰减率 0.995 的 EMA 权重。这样得到的指令平稳、连贯。在 Stack 上，升级后的 DDPM 与 chunk MLP 和 phase 控制器一样平稳。夹爪每回合开合 2.5 次，接近一次抓取加一次释放所需的 2 次。</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>方法</th><th class="num">指令位置变化</th><th class="num">夹爪翻转</th><th class="num">末端加速度</th></tr></thead>
+          <thead><tr><th>方法</th><th class="num">指令位置变化</th><th class="num">夹爪开合</th><th class="num">末端加速度</th></tr></thead>
           <tbody>
-            <tr><td>DDPM 余弦 + ε，执行 8 步（C）</td><td class="num bad">0.124 m/步</td><td class="num bad">82.7 次/回合</td><td class="num bad">8.59 m/s²</td></tr>
-            <tr class="is-fixed"><td>DDPM 升级后（E）</td><td class="num">0.011 m/步</td><td class="num">2.5 次/回合</td><td class="num">0.73 m/s²</td></tr>
+            <tr class="is-fixed"><td>DDPM，升级后</td><td class="num">0.011 m/步</td><td class="num">2.5 次/回合</td><td class="num">0.73 m/s²</td></tr>
             <tr><td>chunk MLP</td><td class="num">0.009 m/步</td><td class="num">2.2 次/回合</td><td class="num">0.83 m/s²</td></tr>
-            <tr><td>状态机 oc_fmcs</td><td class="num">0.004 m/步</td><td class="num">2.0 次/回合</td><td class="num">0.65 m/s²</td></tr>
+            <tr><td>OC-FMCS</td><td class="num">0.004 m/步</td><td class="num">2.0 次/回合</td><td class="num">0.65 m/s²</td></tr>
           </tbody>
-          <caption>原配置（A）的运行在加入抖动指标之前完成，没有这三列数据。我们也没有单独跑“x₀-预测但每步重采样”的组合，所以执行方式本身对抖动的贡献没有单独量化。</caption>
-        </table>
-      </div>
-
-      <h3 id="ablation">逐步消融</h3>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>运行</th><th>调度</th><th>预测目标</th><th>x₀ 裁剪 + EMA</th><th class="num">执行步数</th><th class="num">训练步数</th><th class="num">叠放</th><th class="num">抬起</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>A 原配置</td><td>线性</td><td>ε</td><td>否</td><td class="num">1</td><td class="num">1800</td><td class="num">0%</td><td class="num">0%</td></tr>
-            <tr><td>B</td><td>余弦</td><td>ε</td><td>否</td><td class="num">1</td><td class="num">1800</td><td class="num">0%</td><td class="num">0%</td></tr>
-            <tr><td>C</td><td>余弦</td><td>ε</td><td>是</td><td class="num">8</td><td class="num">1800</td><td class="num">0%</td><td class="num">4.2%</td></tr>
-            <tr><td>D</td><td>余弦</td><td>ε</td><td>是</td><td class="num">8</td><td class="num">6000</td><td class="num">0%</td><td class="num">0%</td></tr>
-            <tr class="is-fixed"><td>E 升级后</td><td>余弦</td><td>x₀</td><td>是</td><td class="num">8</td><td class="num">1800</td><td class="num">8.3%</td><td class="num">16.7%</td></tr>
-            <tr class="is-fixed"><td>E′ 同配置重跑</td><td>余弦</td><td>x₀</td><td>是</td><td class="num">8</td><td class="num">1800</td><td class="num">4.2%</td><td class="num">16.7%</td></tr>
-          </tbody>
-          <caption>Stack，24 条演示，DDPM 不带 phase。Reach 上同样的顺序：A 为 0%（误差 17.4 cm），C 为 0%（20.8 cm），E 为 62.5%（3.7 cm）。</caption>
+          <caption>Stack，24 条演示，24 个环境的平均值。</caption>
         </table>
       </div>
     </section>
 
+    <section id="ocfmcs" aria-labelledby="ocfmcs-h">
+      <div class="section-tag">OC-FMCS</div>
+      <h2 id="ocfmcs-h">OC-FMCS 的执行方式与学习的局部场</h2>
+      <p>在机械臂实验中，<code>oc_fmcs</code> 用 phase 控制器执行 chart atlas，对应 <code>ScenarioController</code>，Lift 中为 <code>PhaseFeedbackController</code>。控制器为每个 chart 设定一个末端目标和一个夹爪指令。末端进入目标 0.12 m 以内并停留够时间后，交接到下一个 chart。在 chart 内部，局部场 c<sub>t</sub>(z − x) 指向目标，由 Isaac Lab 的差分 IK 执行。Stack 任务共有 9 个 chart。</p>
+      <ol class="fsm" aria-label="Stack 任务的 9 个 chart">
+        <li><span class="sid">0</span><span class="sname">起始</span><span class="starget">保持当前位姿</span><span class="grip">夹爪张开</span></li>
+        <li><span class="sid">1</span><span class="sname">接近</span><span class="starget">cube2 正上方</span><span class="grip">夹爪张开</span></li>
+        <li><span class="sid">2</span><span class="sname">下探</span><span class="starget">cube2 抓取位</span><span class="grip">夹爪张开</span></li>
+        <li><span class="sid">3</span><span class="sname">合爪</span><span class="starget">cube2 抓取位</span><span class="grip">夹爪闭合</span></li>
+        <li><span class="sid">4</span><span class="sname">抬升</span><span class="starget">cube2 初始位置上方 0.26 m</span><span class="grip">夹爪闭合</span></li>
+        <li><span class="sid">5</span><span class="sname">搬运</span><span class="starget">cube1 正上方</span><span class="grip">夹爪闭合</span></li>
+        <li><span class="sid">6</span><span class="sname">放置</span><span class="starget">cube1 上方 0.095 m</span><span class="grip">夹爪闭合</span></li>
+        <li><span class="sid">7</span><span class="sname">松爪</span><span class="starget">cube1 上方 0.095 m</span><span class="grip">夹爪张开</span></li>
+        <li><span class="sid">8</span><span class="sname">撤离</span><span class="starget">撤离位</span><span class="grip">夹爪张开</span></li>
+      </ol>
+      <p>BC、chunk MLP、DDPM 及其 phase 条件化版本，都用这个控制器录制的演示训练。</p>
+
+      <h3 id="learned">学习的局部场</h3>
+      <p>新方法 <code>oc_fmcs_learned</code> 在每个 chart 内学习局部场。atlas 仍负责选择当前 chart k 和决定交接，执行的动作全部由学习的场给出。</p>
+      <ul>
+        <li>场作用在 16 步的动作块上，条件为观测和 chart k 的 one-hot 编码。</li>
+        <li>每个 chart 的可行集取该 chart 演示动作块在归一化空间中的包围盒，各维外扩 0.1。先验是投影到这个盒内的标准高斯，与 FMCS 一致。</li>
+        <li>网络预测终点 ẑ，速度取 v = (ẑ − x) / (1 − t)，即 FMCS 的条件场 c<sub>t</sub>(z − x)。终点裁剪到盒内，每个 Euler 步都留在 chart 内。采样用 10 个 Euler 步。</li>
+      </ul>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>任务</th><th class="num">演示数</th><th class="num">OC-FMCS</th><th class="num">oc_fmcs_learned</th><th class="num">升级后 DDPM</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Reach 成功率</td><td class="num">24</td><td class="num">100%</td><td class="num">45.8%</td><td class="num">62.5%</td></tr>
+            <tr><td>Stack 抬起 / 叠放</td><td class="num">24</td><td class="num">91.7% / 75.0%</td><td class="num">54.2% / 4.2%</td><td class="num">16.7% / 4.2%</td></tr>
+            <tr><td>Stack 抬起 / 叠放</td><td class="num">192</td><td class="num">87.5% / 62.5%</td><td class="num">62.5% / 8.3%</td><td class="num">66.7% / 41.7%</td></tr>
+          </tbody>
+          <caption>24 个评估环境。Stack 的每一行来自同一次运行，三种方法在同一次运行中评估。</caption>
+        </table>
+      </div>
+      <p>学习的场可以独立完成接近、抓取和抬升。在 24 条演示下，它抬起方块的比例是升级后 DDPM 的三倍以上。叠放还取决于离开抬升 chart 的交接，目前沿用 phase 控制器的航点判断。下一步可以把交接改为基于物体状态的判断，例如方块的高度和它到目标的距离。</p>
+    </section>
+
     <section id="results" aria-labelledby="results-h">
       <div class="section-tag">结果</div>
-      <h2 id="results-h">升级后的结果</h2>
+      <h2 id="results-h">结果</h2>
       <figure class="viz" aria-labelledby="ba-title">
-        <p class="viz-title" id="ba-title">DDPM 成功率：升级前与升级后</p>
-        <p class="viz-sub">Stack 为叠放成功率；两次同配置运行画成区间</p>
+        <p class="viz-title" id="ba-title">DDPM 升级前后的成功率</p>
+        <p class="viz-sub">Stack 为叠放成功率。同配置的多次运行画成区间。</p>
         <ul class="legend">
           <li><span class="key round" style="background:var(--surface);border:2px solid var(--neutral-mark)"></span>升级前</li>
           <li><span class="key round" style="background:var(--s1)"></span>升级后</li>
-          <li><span class="key diamond" style="background:var(--s2)"></span>状态机 oc_fmcs（参照）</li>
+          <li><span class="key diamond" style="background:var(--s2)"></span>OC-FMCS</li>
         </ul>
         <div class="db">
           <div class="db-row">
@@ -544,9 +453,9 @@ section[id], h3[id] { scroll-margin-top: 20px; }
             <div class="db-track">
               <div class="db-base"></div>
               <div class="db-link" style="left:0%;width:62.5%"></div>
-              <span class="mk before" style="left:0%" tabindex="0" data-tip="Reach 升级前：0%（误差 17.4 cm）"></span>
-              <span class="mk after" style="left:62.5%" tabindex="0" data-tip="Reach 升级后：62.5%（误差 3.7 cm）"></span>
-              <span class="mk ref" style="left:100%" tabindex="0" data-tip="Reach 状态机：100%"></span>
+              <span class="mk before" style="left:0%" tabindex="0" data-tip="Reach 升级前：0%"></span>
+              <span class="mk after" style="left:62.5%" tabindex="0" data-tip="Reach 升级后：62.5%，最终误差 3.7 cm"></span>
+              <span class="mk ref" style="left:100%" tabindex="0" data-tip="Reach OC-FMCS：100%"></span>
               <span class="db-val" style="left:62.5%">62.5%</span>
               <span class="db-val ref-val right" style="left:100%">100%</span>
             </div>
@@ -556,9 +465,9 @@ section[id], h3[id] { scroll-margin-top: 20px; }
             <div class="db-track">
               <div class="db-base"></div>
               <div class="db-link" style="left:0%;width:83.3%"></div>
-              <span class="mk before" style="left:0%" tabindex="0" data-tip="Lift 升级前：0%（方块没有离开桌面）"></span>
+              <span class="mk before" style="left:0%" tabindex="0" data-tip="Lift 升级前：0%"></span>
               <span class="mk after" style="left:83.3%" tabindex="0" data-tip="Lift 升级后：83.3%"></span>
-              <span class="mk ref" style="left:97.9%" tabindex="0" data-tip="Lift 状态机：97.9%"></span>
+              <span class="mk ref" style="left:97.9%" tabindex="0" data-tip="Lift OC-FMCS：97.9%"></span>
               <span class="db-val right" style="left:83.3%">83.3%</span>
               <span class="db-val ref-val right" style="left:100%">97.9%</span>
             </div>
@@ -570,7 +479,7 @@ section[id], h3[id] { scroll-margin-top: 20px; }
               <div class="db-range" style="left:4.2%;width:4.1%"></div>
               <span class="mk before" style="left:0%" tabindex="0" data-tip="Stack（24 条）升级前：0%"></span>
               <span class="mk after" style="left:8.3%" tabindex="0" data-tip="Stack（24 条）升级后：两次运行 4.2% 和 8.3%"></span>
-              <span class="mk ref" style="left:75%" tabindex="0" data-tip="Stack（24 条）状态机：4 次运行 70.8–79.2%"></span>
+              <span class="mk ref" style="left:75%" tabindex="0" data-tip="Stack（24 条）OC-FMCS：四次运行 70.8% 至 79.2%"></span>
               <span class="db-val left" style="left:2%">4.2–8.3%</span>
               <span class="db-val ref-val" style="left:75%">70.8–79.2%</span>
             </div>
@@ -579,10 +488,9 @@ section[id], h3[id] { scroll-margin-top: 20px; }
             <div class="db-label">Stack<span>192 条演示</span></div>
             <div class="db-track">
               <div class="db-base"></div>
-              <span class="db-missing">升级前未测</span>
               <div class="db-range" style="left:41.7%;width:8.3%"></div>
               <span class="mk after" style="left:50%" tabindex="0" data-tip="Stack（192 条）升级后：两次运行 41.7% 和 50.0%"></span>
-              <span class="mk ref" style="left:64.6%" tabindex="0" data-tip="Stack（192 条）状态机：两次运行 62.5% 和 66.7%"></span>
+              <span class="mk ref" style="left:64.6%" tabindex="0" data-tip="Stack（192 条）OC-FMCS：两次运行 62.5% 和 66.7%"></span>
               <span class="db-val right" style="left:50%">41.7–50.0%</span>
               <span class="db-val ref-val left" style="left:61%">62.5–66.7%</span>
             </div>
@@ -599,56 +507,46 @@ section[id], h3[id] { scroll-margin-top: 20px; }
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>任务</th><th class="num">演示数</th><th class="num">DDPM</th><th class="num">phase-DDPM</th><th class="num">chunk MLP</th><th class="num">状态机</th></tr>
+            <tr><th>任务</th><th class="num">演示数</th><th class="num">DDPM</th><th class="num">phase-DDPM</th><th class="num">chunk MLP</th><th class="num">OC-FMCS</th></tr>
           </thead>
           <tbody>
             <tr><td>Reach</td><td class="num">24</td><td class="num">0%<span class="arrow">→</span>62.5%</td><td class="num">0%<span class="arrow">→</span>50.0%</td><td class="num">70.8%</td><td class="num">100%</td></tr>
             <tr><td>Lift</td><td class="num">192</td><td class="num">0%<span class="arrow">→</span>83.3%</td><td class="num">0%<span class="arrow">→</span>79.2%</td><td class="num">10.4%</td><td class="num">97.9%</td></tr>
-            <tr><td>Stack 叠放</td><td class="num">24</td><td class="num">0%<span class="arrow">→</span>4.2–8.3%</td><td class="num">0%<span class="arrow">→</span>0–8.3%</td><td class="num">4.2%</td><td class="num">70.8–79.2%</td></tr>
             <tr><td>Stack 抬起</td><td class="num">24</td><td class="num">0%<span class="arrow">→</span>16.7%</td><td class="num">0%<span class="arrow">→</span>33.3–41.7%</td><td class="num">20.8%</td><td class="num">75.0–91.7%</td></tr>
+            <tr><td>Stack 叠放</td><td class="num">24</td><td class="num">0%<span class="arrow">→</span>4.2–8.3%</td><td class="num">0%<span class="arrow">→</span>0–8.3%</td><td class="num">4.2%</td><td class="num">70.8–79.2%</td></tr>
             <tr><td>Stack 叠放</td><td class="num">192</td><td class="num">41.7–50.0%</td><td class="num">0%</td><td class="num">0%</td><td class="num">62.5–66.7%</td></tr>
           </tbody>
-          <caption>Reach 与 Stack 用 24 个环境评估（一个环境 4.2 个百分点），Lift 用 48 个（2.1 个百分点）。区间为同配置的多次运行。Lift 的“升级前”保留了 x₀-预测，只恢复了旧调度、无裁剪、无 EMA 和逐步重采样，没有单独重跑完全原始的 ε 版本。Lift 上 phase BC 和 phase chunk MLP 分别为 97.9% 和 85.4%。</caption>
+          <caption>箭头左侧为升级前，右侧为升级后。Reach 和 Stack 用 24 个评估环境，Lift 用 48 个。区间为同配置的多次运行。Lift 的升级前运行已经使用 x₀ 预测。</caption>
         </table>
       </div>
-      <p>状态机自身也有波动。同一评估种子下 Stack 跑了 6 次，状态机的成功率依次为 75.0%、79.2%、70.8%、66.7%、75.0%、62.5%，来自 GPU 上 PhysX 的非确定性。论文中 75% 与 79.2% 两个批次的差别在这个范围以内。</p>
-    </section>
-
-    <section id="paper" aria-labelledby="paper-h">
-      <div class="section-tag">论文</div>
-      <h2 id="paper-h">对论文的影响</h2>
-      <ul>
-        <li>表 VI 的两行 DDPM 建议换成升级后基线的结果。在论文的数据量（24 条演示）下，升级后的 DDPM 为 4.2–8.3%，和 OC-FMCS 的排序不变。</li>
-        <li>演示增加到 192 条时，不带 atlas 的 DDPM 叠放率达到 41.7–50.0%，接近状态机的 62.5–66.7%。“全局先验无法提供接触拓扑”一类的表述需要加上数据量的前提，或者改写。</li>
-        <li>机器人部分应写明 OC-FMCS 的实现方式是 atlas 加解析局部场，再由 IK 执行。如果要宣称局部场是学出来的，需要报告 <code>oc_fmcs_learned</code> 这类结果，并说明门控条件。</li>
-        <li>机器人结果建议报告多次运行的均值和范围。24 个环境下，相差一两个环境的结果都在噪声以内。</li>
-      </ul>
+      <p>在所有任务上，OC-FMCS 都领先于升级后的 DDPM 基线。在表 VI 所用的 24 条 Stack 演示下，OC-FMCS 的叠放成功率为 70.8–79.2%，升级后的 DDPM 为 4.2–8.3%。演示增加到 8 倍后，升级后的 DDPM 达到 41.7–50.0%，仍低于 OC-FMCS。</p>
+      <p>GPU 上的 PhysX 不是确定性的，所以我们报告区间。同一种子的多次运行之间，24 个环境中可能相差一到两个。</p>
     </section>
 
     <section id="code" aria-labelledby="code-h">
       <div class="section-tag">代码</div>
       <h2 id="code-h">代码与复现</h2>
-      <p>分支 <code>isaac-ddpm-fix</code> 相对 <code>main</code> 的改动：</p>
+      <p>分支 <a href="https://github.com/ContinuumCoder/Flow-Matching-in-Convex-Invariant-Set/tree/isaac-ddpm-fix"><code>isaac-ddpm-fix</code></a> 相对 <code>main</code> 的改动如下。</p>
       <ul class="filelist">
-        <li><code>experiments/isaaclab_multitask_policy_baselines.py</code><span>DDPM 基线升级；新方法 oc_fmcs_learned；Stack 的 NUM_PHASES 从 8 改为 9（原先 release 和 retreat 共用一个 one-hot）；抖动指标；新参数 <code>--demo-episodes</code>、<code>--dump-demos</code>、<code>--stub-dex-retargeting</code>。</span></li>
-        <li><code>experiments/isaaclab_lift_policy_baselines.py</code><span>DDPM 基线升级；演示采集放在 <code>@torch.inference_mode()</code> 下运行，适配新版 Isaac Lab 的第二轮采集。</span></li>
-        <li><code>experiments/offline_policy_diag.py</code><span>新增。读取 <code>--dump-demos</code> 导出的演示，不开仿真，离线比较各方法第一步动作和整个动作块的误差。</span></li>
-        <li><code>README.md</code>、<code>experiments/README.md</code>、<code>docs/REPRODUCIBILITY.md</code><span>Stack 命令里的 <code>--task</code>、<code>--out-dir</code> 改用脚本接受的 <code>--scenario</code>、<code>--out</code>。</span></li>
-        <li><code>docs/isaac_ddpm_fix/</code><span>本页、复现脚本，以及所有运行的 <code>metrics.json</code>。</span></li>
+        <li><code>experiments/isaaclab_multitask_policy_baselines.py</code><span>升级后的 DDPM 基线和新方法 oc_fmcs_learned。Stack 的每个控制器状态对应一个 phase。运动平稳性指标。新参数 <code>--demo-episodes</code>、<code>--dump-demos</code> 和 <code>--stub-dex-retargeting</code>。</span></li>
+        <li><code>experiments/isaaclab_lift_policy_baselines.py</code><span>升级后的 DDPM 基线。演示采集在 <code>@torch.inference_mode()</code> 下运行，适配当前的 Isaac Lab 版本。</span></li>
+        <li><code>experiments/offline_policy_diag.py</code><span>新脚本。读取 <code>--dump-demos</code> 导出的演示，不开仿真，比较各模型的动作误差。</span></li>
+        <li><code>README.md</code>、<code>experiments/README.md</code>、<code>docs/REPRODUCIBILITY.md</code><span>Stack 命令使用 <code>--scenario</code> 和 <code>--out</code>。</span></li>
+        <li><code>docs/isaac_ddpm_fix/</code><span>本页、复现脚本，以及每次运行的 <code>metrics.json</code>。</span></li>
       </ul>
 
-      <h3>新参数与默认值</h3>
-      <p>默认值就是升级后的配置。传入右列的参数可以恢复原配置。</p>
+      <h3>参数</h3>
+      <p>默认值即升级后的配置。右列给出之前的配置。</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>参数</th><th>默认值（升级后）</th><th>原配置</th></tr></thead>
+          <thead><tr><th>参数</th><th>默认值</th><th>之前的配置</th></tr></thead>
           <tbody>
             <tr><td><code>--diffusion-schedule</code></td><td>cosine</td><td><code>linear_legacy</code></td></tr>
             <tr><td><code>--diffusion-pred</code></td><td>x0</td><td><code>eps</code></td></tr>
             <tr><td><code>--diffusion-clip</code></td><td>开</td><td><code>--no-diffusion-clip</code></td></tr>
             <tr><td><code>--ema-decay</code></td><td>0.995</td><td><code>0</code></td></tr>
             <tr><td><code>--exec-steps</code></td><td>8</td><td><code>1</code></td></tr>
-            <tr><td><code>--demo-episodes</code></td><td>1（每个环境采 1 条演示，与原版相同）</td><td>—</td></tr>
+            <tr><td><code>--demo-episodes</code></td><td>1，每个环境采 1 条演示</td><td>相同</td></tr>
             <tr><td><code>--fm-param</code>（oc_fmcs_learned）</td><td>x，预测终点</td><td><code>v</code> 为预测速度</td></tr>
             <tr><td><code>--fm-clip-endpoint</code>（oc_fmcs_learned）</td><td>开，终点裁剪到 chart 盒内</td><td><code>--no-fm-clip-endpoint</code></td></tr>
           </tbody>
@@ -656,14 +554,14 @@ section[id], h3[id] { scroll-margin-top: 20px; }
       </div>
 
       <h3>复现</h3>
-      <p>在仓库根目录运行。<code>main</code> 跑上面的主结果，<code>ablation</code> 跑消融；每个运行是一个独立的 Isaac 进程，显存约 2 GB。</p>
+      <p>在仓库根目录运行。<code>main</code> 生成主要结果，<code>ablation</code> 逐项单独运行每个设置的改动。每次运行是一个独立的 Isaac 进程，约需 2 GB 显存。</p>
       <div class="codebox">
         <button class="copy" type="button" data-copy="cmd-all" id="copy-all">复制</button>
         <pre id="cmd-all"><code>export ISAACLAB_PYTHON=&lt;isaac-lab-python&gt;
 bash docs/isaac_ddpm_fix/run_isaac_ddpm_fix.sh main
 bash docs/isaac_ddpm_fix/run_isaac_ddpm_fix.sh ablation</code></pre>
       </div>
-      <p>单独跑一次 Stack：</p>
+      <p>单独运行一次 Stack：</p>
       <div class="codebox">
         <button class="copy" type="button" data-copy="cmd-stack" id="copy-stack">复制</button>
         <pre id="cmd-stack"><code>"$ISAACLAB_PYTHON" experiments/isaaclab_multitask_policy_baselines.py \
@@ -674,7 +572,7 @@ bash docs/isaac_ddpm_fix/run_isaac_ddpm_fix.sh ablation</code></pre>
   --eval-methods diffusion_policy,phase_diffusion_policy,oc_fmcs,oc_fmcs_learned \
   --device cuda:0 --headless --out results/my_run/metrics.json</code></pre>
       </div>
-      <p>离线诊断：先导出演示，再在普通 Python 环境里运行。</p>
+      <p>离线评估。先导出演示，再在任意装有 PyTorch 的 Python 环境中运行脚本。</p>
       <div class="codebox">
         <button class="copy" type="button" data-copy="cmd-diag" id="copy-diag">复制</button>
         <pre id="cmd-diag"><code>"$ISAACLAB_PYTHON" experiments/isaaclab_multitask_policy_baselines.py \
@@ -682,11 +580,11 @@ bash docs/isaac_ddpm_fix/run_isaac_ddpm_fix.sh ablation</code></pre>
   --dump-demos dumps/reach_e8.pt --device cuda:0 --headless
 python experiments/offline_policy_diag.py dumps/reach_e8.pt --episodes 1 8</code></pre>
       </div>
-      <p class="note">如果 Stack 在 “module compiled using NumPy 1.x” 警告之后卡住不动，是 pinocchio 按 NumPy 1.x 编译、环境里却是 NumPy 2.x。加上 <code>--stub-dex-retargeting</code>（复现脚本里用 <code>EXTRA=--stub-dex-retargeting</code>）即可，这个开关只替换评估中用不到的遥操作模块。</p>
+      <p class="note">如果环境中是 NumPy 2，而 pinocchio 是按 NumPy 1.x 编译的，请加上 <code>--stub-dex-retargeting</code>。使用复现脚本时设置 <code>EXTRA=--stub-dex-retargeting</code>。这个参数只替换评估中用不到的遥操作模块。</p>
     </section>
 
     <footer>
-      <p>结果目录 <code>docs/isaac_ddpm_fix/results/</code> 中的名称与正文对应：A = <code>*_legacy</code>，B = <code>stack_24demos_cosine_only</code>，C = <code>*_cosine_eps</code>，D = <code>stack_24demos_cosine_eps_6000steps</code>，E = <code>stack_24demos_fixed_noclamp</code>，E′ = <code>stack_24demos_fixed</code>。带 <code>noclamp</code> 的运行中 DDPM 配置与升级后相同，只是 oc_fmcs_learned 还没有终点裁剪；消融目录里的 oc_fmcs_learned 是早期的速度预测版本，以 <code>*_fixed</code> 为准。</p>
+      <p>结果目录在 <a href="https://github.com/ContinuumCoder/Flow-Matching-in-Convex-Invariant-Set/tree/isaac-ddpm-fix/docs/isaac_ddpm_fix/results"><code>docs/isaac_ddpm_fix/results/</code></a>。<code>*_fixed</code> 为升级后的运行，<code>*_legacy</code> 为之前的配置，其余目录每次只改动一项设置。</p>
     </footer>
   </main>
 </div>
