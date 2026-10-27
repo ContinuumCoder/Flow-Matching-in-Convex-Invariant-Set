@@ -87,9 +87,9 @@ xvfb-run -a "$ISAACLAB_PYTHON" \
 Qualitative comparison scripts render camera views with the robot, object,
 obstacle or goal, and success or failure behavior visible in the same frame.
 
-In these scripts `oc_fmcs` is the scripted chart controller (atlas, analytic
-local field, IK). [docs/isaac_ddpm_fix/](docs/isaac_ddpm_fix/) documents a learned
-variant (`oc_fmcs_learned`) and an upgraded DDPM baseline, with all metrics.
+In these scripts `oc_fmcs` executes the chart atlas with a phase controller and
+IK. [docs/isaac_ddpm_fix/](docs/isaac_ddpm_fix/) describes the upgraded DDPM
+baselines and the learned local field `oc_fmcs_learned`, with all metrics.
 
 ## Language-Conditioned Charts
 
