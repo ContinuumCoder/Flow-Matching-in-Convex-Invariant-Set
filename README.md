@@ -76,16 +76,20 @@ OMNI_KIT_ACCEPT_EULA=YES ACCEPT_EULA=YES PRIVACY_CONSENT=Y \
 OMNI_KIT_DISABLE_TELEMETRY=1 \
 xvfb-run -a "$ISAACLAB_PYTHON" \
   experiments/isaaclab_multitask_policy_baselines.py \
-  --task stack \
+  --scenario stack \
   --num-envs 24 \
   --steps 240 \
   --device cuda:0 \
   --headless \
-  --out-dir results/isaaclab_stack_metrics
+  --out results/isaaclab_stack_metrics/metrics.json
 ```
 
 Qualitative comparison scripts render camera views with the robot, object,
 obstacle or goal, and success or failure behavior visible in the same frame.
+
+In these scripts `oc_fmcs` is the scripted chart controller (atlas, analytic
+local field, IK). [docs/isaac_ddpm_fix/](docs/isaac_ddpm_fix/) documents a learned
+variant (`oc_fmcs_learned`) and the fix to the DDPM baseline, with all metrics.
 
 ## Language-Conditioned Charts
 

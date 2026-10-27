@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import math
 import os
@@ -48,6 +49,33 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chunk-train-steps", type=int, default=1200)
     parser.add_argument("--diffusion-train-steps", type=int, default=1600)
     parser.add_argument("--diffusion-steps", type=int, default=16)
+    parser.add_argument(
+        "--diffusion-schedule",
+        choices=["cosine", "linear_legacy"],
+        default="cosine",
+        help="linear_legacy reproduces the original linspace(1e-4, 0.02, T) betas.",
+    )
+    parser.add_argument(
+        "--diffusion-pred",
+        choices=["x0", "eps"],
+        default="x0",
+        help="Denoiser target. With a small MLP on 128-D chunks, eps-prediction has to reproduce the full "
+        "noise vector and stays far from converged at this training budget; x0 does not.",
+    )
+    parser.add_argument(
+        "--diffusion-clip",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Clip the predicted clean chunk to the normalized demo range at each denoising step.",
+    )
+    parser.add_argument("--ema-decay", type=float, default=0.995, help="EMA for diffusion weights; 0 disables.")
+    parser.add_argument(
+        "--exec-steps",
+        type=int,
+        default=8,
+        help="Execute this many actions of a sampled diffusion chunk before resampling "
+        "(1 = resample every control step, the original behavior).",
+    )
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--hidden-dim", type=int, default=384)
     parser.add_argument("--lr", type=float, default=3e-4)
@@ -290,6 +318,48 @@ class DiffusionChunkMLP(nn.Module):
         return self.net(torch.cat([obs, noisy_chunk, self.time_embedding(t)], dim=-1))
 
 
+def ema_copy(model: nn.Module) -> nn.Module | None:
+    if args_cli.ema_decay <= 0:
+        return None
+    ema = copy.deepcopy(model)
+    for p in ema.parameters():
+        p.requires_grad_(False)
+    return ema
+
+
+@torch.no_grad()
+def ema_update(ema: nn.Module | None, model: nn.Module) -> None:
+    if ema is None:
+        return
+    for p_ema, p in zip(ema.parameters(), model.parameters()):
+        p_ema.lerp_(p, 1.0 - args_cli.ema_decay)
+
+
+class ChunkPlan:
+    def __init__(self, num_envs: int, horizon: int, action_dim: int, exec_steps: int, device: torch.device):
+        self.exec_steps = max(1, min(exec_steps, horizon))
+        self.buf = torch.zeros(num_envs, horizon, action_dim, device=device)
+        self.idx = torch.full((num_envs,), self.exec_steps, dtype=torch.long, device=device)
+        self.last_phase: torch.Tensor | None = None
+
+    def need_replan(self, phase: torch.Tensor | None = None) -> torch.Tensor:
+        need = self.idx >= self.exec_steps
+        if phase is not None:
+            if self.last_phase is not None:
+                need = need | (phase != self.last_phase)
+            self.last_phase = phase.clone()
+        return need
+
+    def update(self, need: torch.Tensor, chunk: torch.Tensor) -> None:
+        self.buf[need] = chunk
+        self.idx[need] = 0
+
+    def pop(self) -> torch.Tensor:
+        action = self.buf[torch.arange(self.buf.shape[0], device=self.buf.device), self.idx]
+        self.idx += 1
+        return action
+
+
 def get_ee_pose(env) -> tuple[torch.Tensor, torch.Tensor]:
     arm_action = env.unwrapped.action_manager._terms["arm_action"]
     return arm_action._compute_frame_pose()
@@ -310,6 +380,7 @@ def make_env():
     return env, env_cfg
 
 
+@torch.inference_mode()
 def collect_oc_fmcs_demos(env, env_dt: float, action_dim: int, device: torch.device) -> dict[str, torch.Tensor]:
     obs_episodes = []
     action_episodes = []
@@ -418,7 +489,13 @@ def train_chunk_mlp(chunk_obs, chunks, obs_mean, obs_std, chunk_mean, chunk_std,
 
 
 def diffusion_schedule(num_steps: int, device: torch.device):
-    betas = torch.linspace(1e-4, 0.02, num_steps, device=device)
+    if args_cli.diffusion_schedule == "linear_legacy":
+        betas = torch.linspace(1e-4, 0.02, num_steps, device=device)
+    else:
+        s = 0.008
+        grid = torch.arange(num_steps + 1, device=device, dtype=torch.float64) / num_steps
+        f = torch.cos((grid + s) / (1 + s) * math.pi / 2) ** 2
+        betas = (1.0 - f[1:] / f[:-1]).clamp(max=0.999).float()
     alphas = 1.0 - betas
     alpha_bar = torch.cumprod(alphas, dim=0)
     return betas, alphas, alpha_bar
@@ -429,6 +506,7 @@ def train_diffusion(chunk_obs, chunks, obs_mean, obs_std, chunk_mean, chunk_std,
     device = chunk_obs.device
     chunk_dim = chunks.shape[-1]
     model = DiffusionChunkMLP(chunk_obs.shape[-1], chunk_dim, args_cli.hidden_dim).to(device)
+    ema = ema_copy(model)
     opt = torch.optim.AdamW(model.parameters(), lr=args_cli.lr)
     _betas, _alphas, alpha_bar = diffusion_schedule(args_cli.diffusion_steps, device)
     total = chunk_obs.shape[0]
@@ -442,39 +520,46 @@ def train_diffusion(chunk_obs, chunks, obs_mean, obs_std, chunk_mean, chunk_std,
         ab = alpha_bar[t].unsqueeze(-1)
         noisy = ab.sqrt() * norm_chunks[idx] + (1.0 - ab).sqrt() * noise
         pred = model(norm_obs[idx], noisy, t)
-        loss = F.mse_loss(pred, noise)
+        loss = F.mse_loss(pred, norm_chunks[idx] if args_cli.diffusion_pred == "x0" else noise)
         opt.zero_grad(set_to_none=True)
         loss.backward()
         opt.step()
+        ema_update(ema, model)
         losses.append(float(loss.detach().cpu()))
     log(
         f"trained {name} for {args_cli.diffusion_train_steps} steps "
-        f"with {args_cli.diffusion_steps} denoising steps in {time.perf_counter() - stage_start:.2f}s"
+        f"with {args_cli.diffusion_steps} denoising steps ({args_cli.diffusion_schedule} schedule, "
+        f"alpha_bar_T={float(alpha_bar[-1]):.4f}) in {time.perf_counter() - stage_start:.2f}s"
     )
-    return model.eval(), losses
+    return (ema if ema is not None else model).eval(), losses
 
 
 @torch.inference_mode()
-def sample_diffusion_chunk(model, obs, obs_mean, obs_std, chunk_mean, chunk_std, action_dim):
+def sample_diffusion_chunk(model, obs, obs_mean, obs_std, stats: dict[str, torch.Tensor], action_dim) -> torch.Tensor:
     device = obs.device
     n = obs.shape[0]
     chunk_dim = args_cli.chunk_horizon * action_dim
     betas, alphas, alpha_bar = diffusion_schedule(args_cli.diffusion_steps, device)
+    legacy = args_cli.diffusion_schedule == "linear_legacy"
     x = torch.randn(n, chunk_dim, device=device)
     norm_obs = (obs - obs_mean) / obs_std
     for t_int in reversed(range(args_cli.diffusion_steps)):
         t = torch.full((n,), t_int, device=device, dtype=torch.long)
-        pred_noise = model(norm_obs, x, t)
+        pred = model(norm_obs, x, t)
         beta = betas[t_int]
-        alpha = alphas[t_int]
         ab = alpha_bar[t_int]
-        mean = (x - beta / (1.0 - ab).sqrt() * pred_noise) / alpha.sqrt()
+        ab_prev = alpha_bar[t_int - 1] if t_int > 0 else torch.ones_like(ab)
+        x0 = pred if args_cli.diffusion_pred == "x0" else (x - (1.0 - ab).sqrt() * pred) / ab.sqrt()
+        if args_cli.diffusion_clip:
+            x0 = torch.maximum(torch.minimum(x0, stats["chunk_hi"]), stats["chunk_lo"])
+        mean = (ab_prev.sqrt() * beta / (1.0 - ab)) * x0 + (alphas[t_int].sqrt() * (1.0 - ab_prev) / (1.0 - ab)) * x
         if t_int > 0:
-            x = mean + beta.sqrt() * torch.randn_like(x)
+            var = beta if legacy else beta * (1.0 - ab_prev) / (1.0 - ab)
+            x = mean + var.sqrt() * torch.randn_like(x)
         else:
             x = mean
-    chunk = x * chunk_std + chunk_mean
-    return sanitize_ik_abs_action(chunk.reshape(n, args_cli.chunk_horizon, action_dim)[:, 0])
+    chunk = x * stats["chunk_std"] + stats["chunk_mean"]
+    return chunk.reshape(n, args_cli.chunk_horizon, action_dim)
 
 
 @torch.inference_mode()
@@ -490,6 +575,7 @@ def evaluate_method(env, env_dt, method: str, models: dict[str, Any], stats: dic
     terminations = torch.zeros(args_cli.num_envs, device=device)
     truncations = torch.zeros(args_cli.num_envs, device=device)
     max_z = object_start[:, 2].detach().clone()
+    plan = ChunkPlan(args_cli.num_envs, args_cli.chunk_horizon, action_dim, args_cli.exec_steps, device)
     policy_compute = 0.0
     start = time.perf_counter()
     for step in range(args_cli.steps):
@@ -509,16 +595,17 @@ def evaluate_method(env, env_dt, method: str, models: dict[str, Any], stats: dic
             chunk = models["chunk"](norm_obs) * stats["chunk_std"] + stats["chunk_mean"]
             action = sanitize_ik_abs_action(chunk.reshape(args_cli.num_envs, args_cli.chunk_horizon, action_dim)[:, 0])
         elif method == "diffusion_policy":
-            action = sample_diffusion_chunk(
-                models["diffusion"],
-                policy_obs,
-                stats["obs_mean"],
-                stats["obs_std"],
-                stats["chunk_mean"],
-                stats["chunk_std"],
-                action_dim,
-            )
+            need = plan.need_replan()
+            if need.any():
+                plan.update(
+                    need,
+                    sample_diffusion_chunk(
+                        models["diffusion"], policy_obs[need], stats["obs_mean"], stats["obs_std"], stats, action_dim
+                    ),
+                )
+            action = sanitize_ik_abs_action(plan.pop())
         elif method in {"phase_bc_mlp", "phase_chunk_mlp", "phase_diffusion_policy"}:
+            phase_now = controller.state.clone()
             phase_obs = torch.cat(
                 [
                     policy_obs,
@@ -537,15 +624,20 @@ def evaluate_method(env, env_dt, method: str, models: dict[str, Any], stats: dic
                 chunk = models["phase_chunk"](norm_obs) * stats["chunk_std"] + stats["chunk_mean"]
                 action = sanitize_ik_abs_action(chunk.reshape(args_cli.num_envs, args_cli.chunk_horizon, action_dim)[:, 0])
             else:
-                action = sample_diffusion_chunk(
-                    models["phase_diffusion"],
-                    phase_obs,
-                    stats["phase_obs_mean"],
-                    stats["phase_obs_std"],
-                    stats["chunk_mean"],
-                    stats["chunk_std"],
-                    action_dim,
-                )
+                need = plan.need_replan(phase_now)
+                if need.any():
+                    plan.update(
+                        need,
+                        sample_diffusion_chunk(
+                            models["phase_diffusion"],
+                            phase_obs[need],
+                            stats["phase_obs_mean"],
+                            stats["phase_obs_std"],
+                            stats,
+                            action_dim,
+                        ),
+                    )
+                action = sanitize_ik_abs_action(plan.pop())
         else:
             raise ValueError(method)
         if device.type == "cuda":
@@ -701,6 +793,8 @@ def main() -> None:
         "chunk_mean": chunk_mean,
         "chunk_std": chunk_std,
     }
+    norm_chunks = (chunks - chunk_mean) / chunk_std
+    stats["chunk_lo"], stats["chunk_hi"] = norm_chunks.min(dim=0).values, norm_chunks.max(dim=0).values
     if phase_obs_mean is not None and phase_obs_std is not None:
         stats.update({"phase_obs_mean": phase_obs_mean, "phase_obs_std": phase_obs_std})
     results = {}
@@ -722,6 +816,11 @@ def main() -> None:
             "chunk_train_steps": args_cli.chunk_train_steps,
             "diffusion_train_steps": args_cli.diffusion_train_steps,
             "diffusion_steps": args_cli.diffusion_steps,
+            "diffusion_schedule": args_cli.diffusion_schedule,
+            "diffusion_pred": args_cli.diffusion_pred,
+            "diffusion_clip": args_cli.diffusion_clip,
+            "ema_decay": args_cli.ema_decay,
+            "exec_steps": args_cli.exec_steps,
             "batch_size": args_cli.batch_size,
             "hidden_dim": args_cli.hidden_dim,
             "lr": args_cli.lr,

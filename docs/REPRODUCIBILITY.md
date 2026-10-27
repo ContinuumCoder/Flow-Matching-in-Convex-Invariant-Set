@@ -69,12 +69,12 @@ OMNI_KIT_ACCEPT_EULA=YES ACCEPT_EULA=YES PRIVACY_CONSENT=Y \
 OMNI_KIT_DISABLE_TELEMETRY=1 \
 xvfb-run -a "$ISAACLAB_PYTHON" \
   experiments/isaaclab_multitask_policy_baselines.py \
-  --task stack \
+  --scenario stack \
   --num-envs 24 \
   --steps 240 \
   --device cuda:0 \
   --headless \
-  --out-dir results/isaaclab_stack_metrics
+  --out results/isaaclab_stack_metrics/metrics.json
 ```
 
 ```bash

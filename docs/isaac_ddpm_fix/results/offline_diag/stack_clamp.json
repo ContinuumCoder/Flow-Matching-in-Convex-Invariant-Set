@@ -1,0 +1,54 @@
+[
+ {
+  "episodes": 1,
+  "train_steps": 1800,
+  "variant": "fmcs_x",
+  "loss": 0.0144,
+  "first_pos_err_mean": 0.1995,
+  "first_pos_err_median": 0.0114,
+  "frac_first_err_lt_2cm": 0.696,
+  "chunk_pos_err_mean": 0.2025,
+  "eval_obs_outlier_rows": 247,
+  "seconds": 6.7,
+  "grip_sign_err": 0.024
+ },
+ {
+  "episodes": 1,
+  "train_steps": 1800,
+  "variant": "fmcs_xc",
+  "loss": 0.0144,
+  "first_pos_err_mean": 0.0243,
+  "first_pos_err_median": 0.0106,
+  "frac_first_err_lt_2cm": 0.727,
+  "chunk_pos_err_mean": 0.0255,
+  "eval_obs_outlier_rows": 247,
+  "seconds": 6.3,
+  "grip_sign_err": 0.019
+ },
+ {
+  "episodes": 8,
+  "train_steps": 1800,
+  "variant": "fmcs_x",
+  "loss": 0.0144,
+  "first_pos_err_mean": 0.0257,
+  "first_pos_err_median": 0.0045,
+  "frac_first_err_lt_2cm": 0.845,
+  "chunk_pos_err_mean": 0.0269,
+  "eval_obs_outlier_rows": 194,
+  "seconds": 4.6,
+  "grip_sign_err": 0.024
+ },
+ {
+  "episodes": 8,
+  "train_steps": 1800,
+  "variant": "fmcs_xc",
+  "loss": 0.0144,
+  "first_pos_err_mean": 0.017,
+  "first_pos_err_median": 0.0044,
+  "frac_first_err_lt_2cm": 0.853,
+  "chunk_pos_err_mean": 0.0178,
+  "eval_obs_outlier_rows": 194,
+  "seconds": 6.4,
+  "grip_sign_err": 0.008
+ }
+]
