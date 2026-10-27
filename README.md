@@ -89,7 +89,7 @@ obstacle or goal, and success or failure behavior visible in the same frame.
 
 In these scripts `oc_fmcs` is the scripted chart controller (atlas, analytic
 local field, IK). [docs/isaac_ddpm_fix/](docs/isaac_ddpm_fix/) documents a learned
-variant (`oc_fmcs_learned`) and the fix to the DDPM baseline, with all metrics.
+variant (`oc_fmcs_learned`) and an upgraded DDPM baseline, with all metrics.
 
 ## Language-Conditioned Charts
 

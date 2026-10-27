@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reruns the Isaac Lab DDPM-baseline fix study whose metrics are in docs/isaac_ddpm_fix/results/.
+# Reruns the Isaac Lab DDPM-baseline upgrade study whose metrics are in docs/isaac_ddpm_fix/results/.
 # Usage, from the repository root:
 #   ISAACLAB_PYTHON=<isaac-lab-python> bash docs/isaac_ddpm_fix/run_isaac_ddpm_fix.sh main|ablation
 # Each run is one Isaac process (24 envs for Reach/Stack, 48 for Lift; ~2 GB GPU memory).

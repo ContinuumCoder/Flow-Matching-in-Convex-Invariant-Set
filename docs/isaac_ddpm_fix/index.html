@@ -1,13 +1,14 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>FMCS 机器人实验复查</title>
+<title>FMCS Robot Experiment Audit</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="How the OC-FMCS controller in the Isaac Lab experiments works, why the original DDPM baseline scored 0%, and results with an upgraded baseline and a learned OC-FMCS variant.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Serif+SC:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600;700&display=swap">
 <style>
 /* Layout: a lab technical note. One reading column (~44em) with a sticky contents rail on wide screens;
    evidence (tables, charts, code) sits inline right after the claim it supports. */
@@ -22,13 +23,12 @@
   --accent: #1f5fae;
   --accent-soft: #e3ecf8;
   --flag: #a8432f;
-  --flag-soft: #f8e9e4;
   --s1: #2a78d6;
   --s2: #eb6834;
   --s3: #1baf7a;
   --neutral-mark: #9aa3b3;
-  --font-display: "Noto Serif SC", "Songti SC", "STSong", serif;
-  --font-body: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-display: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --font-body: "IBM Plex Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
@@ -43,7 +43,6 @@
     --accent: #7eaef0;
     --accent-soft: #1b2a40;
     --flag: #ef8f78;
-    --flag-soft: #3a211b;
     --s1: #3987e5;
     --s2: #d95926;
     --s3: #199e70;
@@ -62,7 +61,6 @@
   --accent: #7eaef0;
   --accent-soft: #1b2a40;
   --flag: #ef8f78;
-  --flag-soft: #3a211b;
   --s1: #3987e5;
   --s2: #d95926;
   --s3: #199e70;
@@ -78,7 +76,7 @@ body {
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 16px;
-  line-height: 1.75;
+  line-height: 1.65;
 }
 a { color: var(--accent); text-underline-offset: 3px; }
 a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-visible {
@@ -87,7 +85,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
   border-radius: 3px;
 }
 code, pre, .mono { font-family: var(--font-mono); }
-code { font-size: 0.88em; background: var(--surface-2); padding: 0.1em 0.35em; border-radius: 4px; }
+code { font-size: 0.86em; background: var(--surface-2); padding: 0.1em 0.35em; border-radius: 4px; }
 
 .page {
   padding-left: max(16px, env(safe-area-inset-left, 0px));
@@ -102,9 +100,8 @@ code { font-size: 0.88em; background: var(--surface-2); padding: 0.1em 0.35em; b
   .page { grid-template-columns: 12rem minmax(0, 46rem); gap: 56px; }
 }
 
-/* contents rail */
 .toc { font-size: 14px; }
-.toc h2 { font-family: var(--font-body); font-size: 12px; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; margin: 0 0 8px; }
+.toc h2 { font-family: var(--font-body); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 8px; }
 .toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .toc a { color: var(--ink-2); text-decoration: none; }
 .toc a:hover { color: var(--accent); }
@@ -117,35 +114,32 @@ code { font-size: 0.88em; background: var(--surface-2); padding: 0.1em 0.35em; b
 
 main { min-width: 0; }
 
-/* header */
 .masthead { display: grid; gap: 14px; padding-bottom: 28px; border-bottom: 1px solid var(--rule); }
 .eyebrow { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.04em; color: var(--muted); }
 h1, h2, h3 { text-wrap: balance; }
-h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.9rem, 4.2vw, 2.5rem); line-height: 1.25; margin: 0; letter-spacing: 0.01em; }
-.lede { font-size: 1.06rem; color: var(--ink-2); margin: 0; max-width: 42em; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.9rem, 4.2vw, 2.5rem); line-height: 1.2; margin: 0; }
+.lede { font-size: 1.06rem; color: var(--ink-2); margin: 0; max-width: 40em; }
 .meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13.5px; color: var(--muted); }
 .meta b { color: var(--ink-2); font-weight: 500; }
 
 section { padding-top: 44px; }
-h2 { font-family: var(--font-display); font-weight: 700; font-size: 1.6rem; line-height: 1.35; margin: 4px 0 14px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 1.6rem; line-height: 1.3; margin: 4px 0 14px; }
 h3 { font-family: var(--font-body); font-weight: 600; font-size: 1.08rem; margin: 30px 0 8px; }
-.section-tag { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.05em; color: var(--accent); }
-p { margin: 0 0 14px; max-width: 44em; }
+.section-tag { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+p { margin: 0 0 14px; max-width: 40em; }
 ul, ol { padding-left: 1.3em; margin: 0 0 14px; }
 li { margin: 4px 0; }
 .note { font-size: 14px; color: var(--muted); }
 .answer { font-size: 1.05rem; font-weight: 500; color: var(--ink); }
 
-/* verdict panel */
 .verdict { margin-top: 28px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
-.verdict-row { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: 4px 18px; padding: 16px 20px; }
+.verdict-row { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: 4px 18px; padding: 16px 20px; }
 .verdict-row + .verdict-row { border-top: 1px solid var(--rule); }
 .verdict-row dt { font-weight: 600; color: var(--accent); font-size: 14.5px; padding-top: 2px; }
 .verdict-row dd { margin: 0; }
 .verdict-row dd p { margin: 0; }
 @media (max-width: 520px) { .verdict-row { grid-template-columns: minmax(0, 1fr); } }
 
-/* code */
 pre {
   background: var(--surface-2);
   border-radius: 6px;
@@ -169,8 +163,7 @@ pre code { background: none; padding: 0; font-size: inherit; }
   border-radius: 6px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap;
 }
 
-/* FSM state strip */
-.fsm { list-style: none; padding: 0; margin: 6px 0 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(7.2rem, 1fr)); gap: 6px; }
+.fsm { list-style: none; padding: 0; margin: 6px 0 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(7.6rem, 1fr)); gap: 6px; }
 .fsm li { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; line-height: 1.35; }
 .fsm .sid { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
 .fsm .sname { display: block; font-weight: 600; font-size: 14.5px; }
@@ -179,7 +172,6 @@ pre code { background: none; padding: 0; font-size: inherit; }
 .fsm li.hot { border-color: var(--s2); box-shadow: inset 0 0 0 1px var(--s2); }
 .fsm li.hot .sid { color: var(--s2); }
 
-/* tables */
 .table-wrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
 table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.45; }
 th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--rule); vertical-align: top; }
@@ -189,10 +181,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 td .sub { display: block; font-size: 12.5px; color: var(--muted); }
 tr.is-fixed td { background: var(--accent-soft); }
 .bad { color: var(--flag); font-weight: 600; }
-.arrow { color: var(--muted); padding: 0 0.15em; }
+.arrow { color: var(--muted); padding: 0 0.2em; }
 caption { caption-side: bottom; text-align: left; padding: 10px 12px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--rule); }
 
-/* figures */
 figure.viz { margin: 8px 0 22px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 18px 18px 14px; }
 .viz-title { font-weight: 600; font-size: 15px; margin: 0 0 2px; }
 .viz-sub { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
@@ -205,7 +196,6 @@ figure.viz details { margin-top: 10px; font-size: 13.5px; }
 figure.viz summary { cursor: pointer; color: var(--accent); }
 figure.viz details .table-wrap { margin-top: 10px; }
 
-/* dumbbell: before -> after, with scripted-controller reference */
 .db { display: grid; gap: 4px; }
 .db-row { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); align-items: center; gap: 4px 14px; }
 .db-label { font-size: 14px; font-weight: 600; line-height: 1.3; }
@@ -236,7 +226,6 @@ figure.viz details .table-wrap { margin-top: 10px; }
   .db-row.axis-row .db-label { display: none; }
 }
 
-/* stacked occupancy bars */
 .occ { display: grid; gap: 10px; }
 .occ-row { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); align-items: center; gap: 4px 14px; }
 .occ-label { font-size: 14px; font-weight: 600; line-height: 1.3; }
@@ -250,7 +239,6 @@ figure.viz details .table-wrap { margin-top: 10px; }
 .occ-seg.c { background: var(--s3); }
 @media (max-width: 560px) { .occ-row { grid-template-columns: minmax(0, 1fr); } }
 
-/* horizontal bars (offline diagnosis) */
 .hb { display: grid; gap: 7px; }
 .hb-row { display: grid; grid-template-columns: 11rem minmax(0, 1fr); align-items: center; gap: 2px 14px; }
 .hb-label { font-size: 13.5px; line-height: 1.3; }
@@ -260,10 +248,9 @@ figure.viz details .table-wrap { margin-top: 10px; }
 .hb-bar.noise { background: var(--s2); }
 .hb-bar.clean { background: var(--s1); }
 .hb-val { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.hb-group { font-size: 12px; letter-spacing: 0.04em; color: var(--muted); padding-top: 6px; }
+.hb-group { font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding-top: 6px; }
 @media (max-width: 560px) { .hb-row { grid-template-columns: minmax(0, 1fr); } }
 
-/* tooltip */
 .tip {
   position: fixed; z-index: 20; pointer-events: none; max-width: 260px;
   background: var(--ink); color: var(--bg); font-size: 12.5px; line-height: 1.45;
@@ -287,300 +274,301 @@ section[id], h3[id] { scroll-margin-top: 20px; }
 </head>
 <body>
 <div class="page">
-  <aside class="toc" aria-label="目录">
+  <aside class="toc" aria-label="Contents">
     <nav>
-      <h2>目录</h2>
+      <h2>Contents</h2>
       <ol>
-        <li><a href="#verdict">结论</a></li>
-        <li><a href="#q1">问题一：oc_fmcs 是什么</a></li>
-        <li><a href="#q2">问题二：Diffusion 为什么是 0%</a></li>
-        <li><a href="#results">修复后的结果</a></li>
-        <li><a href="#paper">对论文的影响</a></li>
-        <li><a href="#code">代码与复现</a></li>
+        <li><a href="#verdict">Summary</a></li>
+        <li><a href="#q1">What oc_fmcs is</a></li>
+        <li><a href="#q2">Why Diffusion scored 0%</a></li>
+        <li><a href="#results">Results</a></li>
+        <li><a href="#paper">Implications for the paper</a></li>
+        <li><a href="#code">Code and reproduction</a></li>
       </ol>
     </nav>
   </aside>
 
   <main>
     <header class="masthead">
-      <div class="eyebrow">FMCS / OC-FMCS · Isaac Lab Franka 实验 · 2026-10-27</div>
-      <h1>FMCS 机器人实验复查</h1>
-      <p class="lede">复现论文 VI-D 节机械臂实验时提出了两个问题。一是三维实验里的 <code>oc_fmcs</code> 分支调用的是手写的阶段控制器，而不是学到的流匹配速度场。二是 Diffusion 基线的成功率一直是 0，仿真里机械臂持续抖动，碰不到目标。这一页逐个回答，并给出修复后的代码和结果。</p>
+      <div class="eyebrow">FMCS / OC-FMCS · Isaac Lab Franka experiments · 2026-10-27</div>
+      <h1>FMCS Robot Experiment Audit</h1>
+      <p class="lede">Two questions came up while reproducing the robot-arm experiments of Section VI-D. First, the <code>oc_fmcs</code> branch of the 3D experiments calls a hand-written phase controller rather than a learned flow-matching velocity field. Second, the Diffusion baseline scores 0% on every task, and in simulation the arm keeps jittering without reaching the target. This page answers both and reports results with an upgraded baseline.</p>
       <div class="meta">
-        <span>分支 <a class="mono" href="https://github.com/ContinuumCoder/Flow-Matching-in-Convex-Invariant-Set/tree/isaac-ddpm-fix">isaac-ddpm-fix</a></span>
-        <span>仿真 <b>Isaac Lab 2.3.2</b>，Franka IK-Abs 任务</span>
-        <span>评估种子 <b class="mono">2027</b></span>
+        <span>Branch <a class="mono" href="https://github.com/ContinuumCoder/Flow-Matching-in-Convex-Invariant-Set/tree/isaac-ddpm-fix">isaac-ddpm-fix</a></span>
+        <span>Isaac Lab <b>2.3.2</b>, Franka IK-Abs tasks</span>
+        <span>Eval seed <b class="mono">2027</b></span>
+        <span><a href="index.zh.html" hreflang="zh-CN" lang="zh-CN">中文版</a></span>
       </div>
     </header>
 
     <section id="verdict" aria-labelledby="verdict-h">
-      <h2 id="verdict-h" style="margin-top:0">结论</h2>
+      <h2 id="verdict-h" style="margin-top:0">Summary</h2>
       <dl class="verdict">
         <div class="verdict-row">
-          <dt>问题一</dt>
-          <dd><p>观察是对的。机器人实验里的 <code>oc_fmcs</code> 是手写的有限状态机加 IK，没有学习的速度场，所有学习型基线模仿的也是它生成的演示。这是实现上的简化，不是漏了实验，但论文正文需要写明。我们补了一个动作完全由学习的场给出的版本 <code>oc_fmcs_learned</code>：Reach 45.8%，Stack 叠放 4.2–8.3%。</p></dd>
+          <dt>Question 1</dt>
+          <dd><p>The observation is correct. In the robot experiments <code>oc_fmcs</code> is a hand-written finite-state machine that drives differential IK. No velocity field is learned, and every learned baseline imitates demonstrations generated by this controller. This is a simplification in the implementation, not a missing experiment, but the paper should state it. We added <code>oc_fmcs_learned</code>, in which a learned field produces every action: 45.8% on Reach and 4.2–8.3% stacking on Stack.</p></dd>
         </div>
         <div class="verdict-row">
-          <dt>问题二</dt>
-          <dd><p>不正常，复现没有漏设置，是基线实现的问题。噪声调度、去噪目标和执行方式三处叠加，去噪器输出接近随机动作。修复后 Reach 从 0% 到 62.5%，Lift 从 0% 到 83.3%，Stack 在 24 条演示下为 4.2–8.3%，192 条演示下为 41.7–50.0%。</p></dd>
+          <dt>Question 2</dt>
+          <dd><p>Nothing was missed in the reproduction; 0% is what the original baseline configuration gives. Its noise schedule, denoising target and execution scheme were set up for a different regime, and with 16 denoising steps and a small MLP they combine into near-random actions. With the baseline upgraded to current practice, Reach goes from 0% to 62.5%, Lift from 0% to 83.3%, and Stack reaches 4.2–8.3% with 24 demonstrations and 41.7–50.0% with 192.</p></dd>
         </div>
         <div class="verdict-row">
-          <dt>另外</dt>
-          <dd><p>Stack 的 phase 数写成了 8（应为 9）；Lift 脚本在新版 Isaac Lab 下第二轮采集会报错卡死；README 里 Stack 命令的参数名写错。三处都已修复。</p></dd>
+          <dt>Also updated</dt>
+          <dd><p>Stack now uses 9 phases to match its 9 controller states; the Lift script runs under recent Isaac Lab releases; the Stack command in the READMEs uses the flag names the script accepts.</p></dd>
         </div>
       </dl>
     </section>
 
     <section id="q1" aria-labelledby="q1-h">
-      <div class="section-tag">问题一</div>
-      <h2 id="q1-h">三维实验里的 oc_fmcs 是手写控制器</h2>
+      <div class="section-tag">Question 1</div>
+      <h2 id="q1-h">The 3D oc_fmcs is a scripted controller</h2>
 
-      <h3>代码里实际做了什么</h3>
-      <p>在 <code>experiments/isaaclab_multitask_policy_baselines.py</code> 的评估循环里，<code>oc_fmcs</code> 分支只有一行：</p>
+      <h3>What the code does</h3>
+      <p>In the evaluation loop of <code>experiments/isaaclab_multitask_policy_baselines.py</code>, the <code>oc_fmcs</code> branch is a single line:</p>
       <pre><code>elif method == "oc_fmcs":
     action = controller.action(obs)</code></pre>
-      <p><code>controller</code> 是 <code>ScenarioController</code>，Lift 脚本里对应的是 <code>PhaseFeedbackController</code>。它按当前状态给出写死的末端目标点和夹爪开合。末端离目标点足够近（本次运行的配置是 0.12 m，即 <code>--stack-overlap-threshold</code>）并且在该状态停留够时间后，切到下一个状态。目标点由 Isaac Lab 的差分 IK 跟踪。整个过程不调用任何网络。Stack 任务的 9 个状态如下：</p>
-      <ol class="fsm" aria-label="Stack 状态机的 9 个状态">
-        <li><span class="sid">0</span><span class="sname">起始</span><span class="starget">保持当前位姿</span><span class="grip">夹爪张开</span></li>
-        <li><span class="sid">1</span><span class="sname">接近</span><span class="starget">cube2 正上方</span><span class="grip">夹爪张开</span></li>
-        <li><span class="sid">2</span><span class="sname">下探</span><span class="starget">cube2 抓取位</span><span class="grip">夹爪张开</span></li>
-        <li><span class="sid">3</span><span class="sname">合爪</span><span class="starget">cube2 抓取位</span><span class="grip">夹爪闭合</span></li>
-        <li class="hot"><span class="sid">4</span><span class="sname">抬升</span><span class="starget">cube2 初始位置上方 0.26 m</span><span class="grip">夹爪闭合</span></li>
-        <li><span class="sid">5</span><span class="sname">搬运</span><span class="starget">cube1 正上方</span><span class="grip">夹爪闭合</span></li>
-        <li><span class="sid">6</span><span class="sname">放置</span><span class="starget">cube1 上方 0.095 m</span><span class="grip">夹爪闭合</span></li>
-        <li><span class="sid">7</span><span class="sname">松爪</span><span class="starget">cube1 上方 0.095 m</span><span class="grip">夹爪张开</span></li>
-        <li><span class="sid">8</span><span class="sname">撤离</span><span class="starget">撤离位</span><span class="grip">夹爪张开</span></li>
+      <p><code>controller</code> is a <code>ScenarioController</code> (<code>PhaseFeedbackController</code> in the Lift script). In each state it emits a fixed end-effector target and gripper command. Once the end effector is close enough to the target (0.12 m in the configuration used here, <code>--stack-overlap-threshold</code>) and has dwelt long enough, it moves to the next state. Isaac Lab's differential IK tracks the target, and no network is called. The nine Stack states are:</p>
+      <ol class="fsm" aria-label="The nine states of the Stack controller">
+        <li><span class="sid">0</span><span class="sname">Start</span><span class="starget">Hold current pose</span><span class="grip">gripper open</span></li>
+        <li><span class="sid">1</span><span class="sname">Approach</span><span class="starget">Above cube 2</span><span class="grip">gripper open</span></li>
+        <li><span class="sid">2</span><span class="sname">Descend</span><span class="starget">Cube 2 grasp pose</span><span class="grip">gripper open</span></li>
+        <li><span class="sid">3</span><span class="sname">Close</span><span class="starget">Cube 2 grasp pose</span><span class="grip">gripper closed</span></li>
+        <li class="hot"><span class="sid">4</span><span class="sname">Lift</span><span class="starget">0.26 m above cube 2's start</span><span class="grip">gripper closed</span></li>
+        <li><span class="sid">5</span><span class="sname">Transfer</span><span class="starget">Above cube 1</span><span class="grip">gripper closed</span></li>
+        <li><span class="sid">6</span><span class="sname">Place</span><span class="starget">0.095 m above cube 1</span><span class="grip">gripper closed</span></li>
+        <li><span class="sid">7</span><span class="sname">Release</span><span class="starget">0.095 m above cube 1</span><span class="grip">gripper open</span></li>
+        <li><span class="sid">8</span><span class="sname">Retreat</span><span class="starget">Retreat pose</span><span class="grip">gripper open</span></li>
       </ol>
-      <p>BC、chunk MLP、DDPM 以及它们的 phase 条件化版本，训练用的演示也全部由这个状态机生成。所以表 VI 比较的其实是“模仿状态机的学习策略”和“状态机本身”。</p>
+      <p>The demonstrations used to train BC, chunk MLP, DDPM and their phase-conditioned variants are all generated by this state machine. Table VI therefore compares learned policies that imitate the state machine against the state machine itself.</p>
 
-      <h3>和论文的关系</h3>
-      <p>论文 Algorithm 2 中，每个 chart 内的局部输运由学到的 v<sub>θ</sub>(x, t, k) 给出。机器人实验把这一层换成了朝当前 chart 目标点的解析场：目标 z 已知时，条件场 u<sub>t</sub>(x | z) = c<sub>t</sub>(z − x) 直接给出方向，再由 IK 执行。chart 的划分和重叠门控（atlas）是真实在用的，局部场则不是学出来的。这是实现上的简化，正文没有交代，读者和审稿人都会有同样的疑问。</p>
+      <h3>How this relates to the paper</h3>
+      <p>In Algorithm 2 the local transport inside each chart comes from a learned v<sub>θ</sub>(x, t, k). The robot experiments replace that layer with the analytic field toward the current chart's target: once the target z is known, the conditional field u<sub>t</sub>(x | z) = c<sub>t</sub>(z − x) gives the direction directly, and IK executes it. The chart partition and the overlap gating (the atlas) are used as described; the local field is not learned. The text does not state this simplification, and readers and reviewers are likely to ask the same question.</p>
 
-      <h3 id="learned">换成学习的场会怎样</h3>
-      <p>为此我们新增了方法 <code>oc_fmcs_learned</code>。状态机只负责给出当前 chart k 和交接时机，它算出的动作被丢弃，执行的动作全部来自学习的场：</p>
+      <h3 id="learned">What happens with a learned field</h3>
+      <p>To answer that, we added the method <code>oc_fmcs_learned</code>. The state machine only supplies the current chart k and the handoff times. Its own action is discarded, and every executed action comes from the learned field:</p>
       <ul>
-        <li>建模对象是 16 步的动作块（Stack 为 16 × 8 = 128 维），网络输入为观测和 chart k 的 one-hot。</li>
-        <li>每个 chart 的凸可行集取该 chart 演示动作块在归一化空间里的包围盒，各维外扩 0.1。先验是标准高斯裁剪到这个盒内，对应论文的投影先验。</li>
-        <li>网络预测终点 ẑ，速度取 v = (ẑ − x) / (1 − t)，即论文的条件场 c<sub>t</sub>(z − x)。ẑ 先裁剪到盒内，于是每个 Euler 步都是 x 与 ẑ 的凸组合，迭代始终留在 chart 内。积分 10 步。</li>
+        <li>The field acts on 16-step action chunks (16 × 8 = 128 dimensions on Stack), conditioned on the observation and a one-hot encoding of chart k.</li>
+        <li>Each chart's convex feasible set is the bounding box of that chart's demonstration chunks in normalized space, padded by 0.1 in every dimension. The prior is a standard Gaussian clipped to this box, which is the paper's projected prior.</li>
+        <li>The network predicts the endpoint ẑ, and the velocity is v = (ẑ − x) / (1 − t), the paper's conditional field c<sub>t</sub>(z − x). ẑ is clipped to the box, so every Euler step is a convex combination of x and ẑ and the iterate never leaves the chart. Integration uses 10 steps.</li>
       </ul>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>任务</th><th class="num">演示数</th><th class="num">状态机 oc_fmcs</th><th class="num">oc_fmcs_learned</th><th class="num">修复后 DDPM（参照）</th></tr>
+            <tr><th>Task</th><th class="num">Demos</th><th class="num">Scripted oc_fmcs</th><th class="num">oc_fmcs_learned</th><th class="num">Upgraded DDPM (reference)</th></tr>
           </thead>
           <tbody>
-            <tr><td>Reach 成功率</td><td class="num">24</td><td class="num">100%</td><td class="num">45.8%</td><td class="num">62.5%</td></tr>
-            <tr><td>Stack 叠放 / 抬起</td><td class="num">24</td><td class="num">75.0% / 91.7%</td><td class="num">4.2% / 54.2%</td><td class="num">4.2% / 16.7%</td></tr>
-            <tr><td>Stack 叠放 / 抬起</td><td class="num">192</td><td class="num">62.5% / 87.5%</td><td class="num">8.3% / 62.5%</td><td class="num">41.7% / 66.7%</td></tr>
+            <tr><td>Reach success</td><td class="num">24</td><td class="num">100%</td><td class="num">45.8%</td><td class="num">62.5%</td></tr>
+            <tr><td>Stack stacked / lifted</td><td class="num">24</td><td class="num">75.0% / 91.7%</td><td class="num">4.2% / 54.2%</td><td class="num">4.2% / 16.7%</td></tr>
+            <tr><td>Stack stacked / lifted</td><td class="num">192</td><td class="num">62.5% / 87.5%</td><td class="num">8.3% / 62.5%</td><td class="num">41.7% / 66.7%</td></tr>
           </tbody>
-          <caption>24 个并行环境，一个环境对应 4.2 个百分点。Stack 两行来自同一次运行内的三种方法（结果目录 <code>stack_24demos_fixed</code>、<code>stack_192demos_fixed</code>），Reach 来自 <code>reach_fixed</code>。</caption>
+          <caption>24 parallel environments, so one environment is 4.2 percentage points. Each Stack row comes from one run that evaluates all three methods (results <code>stack_24demos_fixed</code> and <code>stack_192demos_fixed</code>); Reach comes from <code>reach_fixed</code>.</caption>
         </table>
       </div>
-      <p>学习的场能把方块抬起来，但很少完成叠放。下图统计了 Stack（24 条演示）评估中各状态的停留时间，总量为 24 个环境 × 240 步。状态机在抬升状态只停留 4.6% 的时间，<code>oc_fmcs_learned</code> 和 phase-DDPM 都有约 68% 的时间停在这里。</p>
+      <p>The learned field lifts the cube but rarely completes the stack. The chart below counts the time spent in each controller state while evaluating Stack with 24 demonstrations, out of 24 environments × 240 steps. The state machine spends 4.6% of the time in the lift state. <code>oc_fmcs_learned</code> and phase-DDPM both spend about 68% of it there.</p>
 
       <figure class="viz" aria-labelledby="occ-title">
-        <p class="viz-title" id="occ-title">各状态的停留时间占比</p>
-        <p class="viz-sub">Stack，24 条演示，24 个环境 × 240 步 = 5760 个环境步</p>
+        <p class="viz-title" id="occ-title">Share of time in each controller state</p>
+        <p class="viz-sub">Stack, 24 demonstrations, 24 environments × 240 steps = 5,760 environment steps</p>
         <ul class="legend">
-          <li><span class="key" style="background:var(--s1)"></span>状态 0–3：接近与抓取</li>
-          <li><span class="key" style="background:var(--s2)"></span>状态 4：抬升</li>
-          <li><span class="key" style="background:var(--s3)"></span>状态 5–8：搬运、放置、松爪、撤离</li>
+          <li><span class="key" style="background:var(--s1)"></span>States 0–3: approach and grasp</li>
+          <li><span class="key" style="background:var(--s2)"></span>State 4: lift</li>
+          <li><span class="key" style="background:var(--s3)"></span>States 5–8: transfer, place, release, retreat</li>
         </ul>
         <div class="occ">
           <div class="occ-row">
-            <div class="occ-label">状态机<span>oc_fmcs</span></div>
+            <div class="occ-label">Scripted<span>oc_fmcs</span></div>
             <div class="occ-bar">
-              <div class="occ-seg a" style="flex:1056 1 0" tabindex="0" data-tip="状态机 · 状态 0–3：1056 步（18.3%）">18%</div>
-              <div class="occ-seg b" style="flex:264 1 0" tabindex="0" data-tip="状态机 · 状态 4 抬升：264 步（4.6%）"></div>
-              <div class="occ-seg c" style="flex:4440 1 0" tabindex="0" data-tip="状态机 · 状态 5–8：4440 步（77.1%）">77%</div>
+              <div class="occ-seg a" style="flex:1056 1 0" tabindex="0" data-tip="Scripted · states 0–3: 1,056 steps (18.3%)">18%</div>
+              <div class="occ-seg b" style="flex:264 1 0" tabindex="0" data-tip="Scripted · state 4, lift: 264 steps (4.6%)"></div>
+              <div class="occ-seg c" style="flex:4440 1 0" tabindex="0" data-tip="Scripted · states 5–8: 4,440 steps (77.1%)">77%</div>
             </div>
           </div>
           <div class="occ-row">
-            <div class="occ-label">学习的场<span>oc_fmcs_learned</span></div>
+            <div class="occ-label">Learned field<span>oc_fmcs_learned</span></div>
             <div class="occ-bar">
-              <div class="occ-seg a" style="flex:1252 1 0" tabindex="0" data-tip="oc_fmcs_learned · 状态 0–3：1252 步（21.7%）">22%</div>
-              <div class="occ-seg b" style="flex:3953 1 0" tabindex="0" data-tip="oc_fmcs_learned · 状态 4 抬升：3953 步（68.6%）">69%</div>
-              <div class="occ-seg c" style="flex:555 1 0" tabindex="0" data-tip="oc_fmcs_learned · 状态 5–8：555 步（9.6%）"></div>
+              <div class="occ-seg a" style="flex:1252 1 0" tabindex="0" data-tip="oc_fmcs_learned · states 0–3: 1,252 steps (21.7%)">22%</div>
+              <div class="occ-seg b" style="flex:3953 1 0" tabindex="0" data-tip="oc_fmcs_learned · state 4, lift: 3,953 steps (68.6%)">69%</div>
+              <div class="occ-seg c" style="flex:555 1 0" tabindex="0" data-tip="oc_fmcs_learned · states 5–8: 555 steps (9.6%)"></div>
             </div>
           </div>
           <div class="occ-row">
-            <div class="occ-label">phase-DDPM<span>修复后</span></div>
+            <div class="occ-label">phase-DDPM<span>upgraded</span></div>
             <div class="occ-bar">
-              <div class="occ-seg a" style="flex:1123 1 0" tabindex="0" data-tip="phase-DDPM · 状态 0–3：1123 步（19.5%）">19%</div>
-              <div class="occ-seg b" style="flex:3897 1 0" tabindex="0" data-tip="phase-DDPM · 状态 4 抬升：3897 步（67.7%）">68%</div>
-              <div class="occ-seg c" style="flex:740 1 0" tabindex="0" data-tip="phase-DDPM · 状态 5–8：740 步（12.8%）">13%</div>
+              <div class="occ-seg a" style="flex:1123 1 0" tabindex="0" data-tip="phase-DDPM · states 0–3: 1,123 steps (19.5%)">19%</div>
+              <div class="occ-seg b" style="flex:3897 1 0" tabindex="0" data-tip="phase-DDPM · state 4, lift: 3,897 steps (67.7%)">68%</div>
+              <div class="occ-seg c" style="flex:740 1 0" tabindex="0" data-tip="phase-DDPM · states 5–8: 740 steps (12.8%)">13%</div>
             </div>
           </div>
         </div>
         <details>
-          <summary>查看数据表</summary>
+          <summary>Show data table</summary>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>方法</th><th class="num">状态 0–3</th><th class="num">状态 4</th><th class="num">状态 5–8</th></tr></thead>
+              <thead><tr><th>Method</th><th class="num">States 0–3</th><th class="num">State 4</th><th class="num">States 5–8</th></tr></thead>
               <tbody>
-                <tr><td>状态机 oc_fmcs</td><td class="num">1056（18.3%）</td><td class="num">264（4.6%）</td><td class="num">4440（77.1%）</td></tr>
-                <tr><td>oc_fmcs_learned</td><td class="num">1252（21.7%）</td><td class="num">3953（68.6%）</td><td class="num">555（9.6%）</td></tr>
-                <tr><td>phase-DDPM</td><td class="num">1123（19.5%）</td><td class="num">3897（67.7%）</td><td class="num">740（12.8%）</td></tr>
+                <tr><td>Scripted oc_fmcs</td><td class="num">1,056 (18.3%)</td><td class="num">264 (4.6%)</td><td class="num">4,440 (77.1%)</td></tr>
+                <tr><td>oc_fmcs_learned</td><td class="num">1,252 (21.7%)</td><td class="num">3,953 (68.6%)</td><td class="num">555 (9.6%)</td></tr>
+                <tr><td>phase-DDPM</td><td class="num">1,123 (19.5%)</td><td class="num">3,897 (67.7%)</td><td class="num">740 (12.8%)</td></tr>
               </tbody>
-              <caption>来源：<code>results/stack_24demos_fixed/metrics.json</code> 中的 <code>controller_state_counts</code>。</caption>
+              <caption>Source: <code>controller_state_counts</code> in <code>results/stack_24demos_fixed/metrics.json</code>.</caption>
             </table>
           </div>
         </details>
       </figure>
 
-      <p>原因在门控条件。离开抬升状态要求末端到脚本航点（cube2 初始位置正上方 0.26 m）的距离小于 0.12 m。学到的策略把方块抬了起来，却没有到达这个具体位置，交接条件一直满足不了。抬升状态在演示里本来就短（约占 5% 的步数），这一段的训练数据很少。不带 phase 的 DDPM 不经过这个门控，所以 192 条演示时它的叠放率（41.7–50.0%）反而高于所有 phase 条件化的方法。</p>
+      <p>The gate explains this. Leaving the lift state requires the end effector to come within 0.12 m of a scripted waypoint 0.26 m above cube 2's starting position. The learned policy lifts the cube but does not reach that particular point, so the handoff never fires. The lift state is short in the demonstrations (about 5% of steps), so there is little training data for it. DDPM without phase conditioning never passes through this gate, which is why with 192 demonstrations it stacks more often (41.7–50.0%) than any phase-conditioned method.</p>
       <div class="callout">
-        <p>如果要在论文里报告学习版 OC-FMCS，交接条件应改为基于物体状态的判断（例如方块离桌面的高度、方块与目标的水平距离），而不是末端到脚本航点的距离。</p>
+        <p>To report a learned OC-FMCS in the paper, the handoff should test object state, for example the cube's height above the table and its horizontal distance to the target, instead of the end effector's distance to a scripted waypoint.</p>
       </div>
     </section>
 
     <section id="q2" aria-labelledby="q2-h">
-      <div class="section-tag">问题二</div>
-      <h2 id="q2-h">Diffusion 为什么一直是 0%</h2>
-      <p class="answer">不正常。复现没有漏掉设置，问题出在基线实现上，三处问题叠加。</p>
+      <div class="section-tag">Question 2</div>
+      <h2 id="q2-h">Why Diffusion stayed at 0%</h2>
+      <p class="answer">Nothing was missed in the reproduction. The 0% comes from the original baseline configuration, where three settings combine.</p>
 
-      <h3 id="cause-schedule">原因一：16 步的噪声调度没有走到纯噪声</h3>
-      <p>原代码用的是 DDPM 原论文为 1000 步设计的线性调度 β<sub>t</sub> = linspace(1e-4, 0.02)，但只取了 16 步。最后一步的累计系数是：</p>
-      <div class="formula">ᾱ<sub>T</sub> = ∏<sub>t=1..16</sub> (1 − β<sub>t</sub>) = 0.851，&nbsp;√ᾱ<sub>T</sub> = 0.922</div>
-      <p>训练时模型见过的最“噪”的输入里仍有约 92% 是信号，而采样从纯高斯 N(0, I) 出发，第一步就落在训练分布之外。修复方法是改用余弦调度（squaredcos_cap_v2），16 步下 ᾱ<sub>T</sub> ≈ 1×10<sup>−5</sup>。</p>
-      <p class="note">只修调度不够。Stack 上单独换成余弦调度（下方消融表的 B 行）仍是 0%。</p>
+      <h3 id="cause-schedule">1. A 16-step schedule that never reaches pure noise</h3>
+      <p>The original configuration uses the linear schedule from the DDPM paper, β<sub>t</sub> = linspace(1e-4, 0.02), which was designed for 1,000 steps, with only 16 steps. The cumulative coefficient at the last step is:</p>
+      <div class="formula">ᾱ<sub>T</sub> = ∏<sub>t=1..16</sub> (1 − β<sub>t</sub>) = 0.851, &nbsp;√ᾱ<sub>T</sub> = 0.922</div>
+      <p>The noisiest input seen in training still carries about 92% signal, while sampling starts from pure Gaussian noise N(0, I), so the first denoising step is already out of distribution. The upgraded baseline uses the cosine schedule (squaredcos_cap_v2), which reaches ᾱ<sub>T</sub> ≈ 1×10<sup>−5</sup> in 16 steps.</p>
+      <p class="note">The schedule alone is not enough. Changing only the schedule on Stack (row B of the ablation below) still gives 0%.</p>
 
-      <h3 id="cause-target">原因二：ε-预测在这个网络规模下学不动</h3>
-      <p>原代码让网络预测噪声 ε。动作块是 112 维（Reach）或 128 维（Stack），网络是宽 256 的 MLP，要把一个高维高斯噪声原样复现出来很难。干净的动作块落在演示数据的低维结构上，直接预测它（x₀-预测）容易得多。为了把生成器本身和闭环效应分开，我们做了离线诊断：不开仿真，在评估种子的专家状态上比较第一步动作与专家动作的位置误差。</p>
+      <h3 id="cause-target">2. ε-prediction does not train at this network size</h3>
+      <p>The original network predicts the noise ε. Action chunks have 112 (Reach) or 128 (Stack) dimensions and the network is a width-256 MLP, which struggles to reproduce a high-dimensional Gaussian sample exactly. Clean action chunks lie on the low-dimensional structure of the demonstrations, so predicting them directly (x₀-prediction) is much easier. To separate the generator from closed-loop effects we ran an offline diagnosis: without the simulator, on expert states from the evaluation seed, we compare each method's first action with the expert's.</p>
 
       <figure class="viz" aria-labelledby="diag-title">
-        <p class="viz-title" id="diag-title">第一步动作的位置误差（cm，越低越好）</p>
-        <p class="viz-sub">Reach，24 条演示，训练 1800 步；离线诊断 <code>offline_policy_diag.py</code></p>
+        <p class="viz-title" id="diag-title">Position error of the first action (cm, lower is better)</p>
+        <p class="viz-sub">Reach, 24 demonstrations, 1,800 training steps; offline diagnosis with <code>offline_policy_diag.py</code></p>
         <ul class="legend">
-          <li><span class="key" style="background:var(--s2)"></span>预测噪声 ε 或速度</li>
-          <li><span class="key" style="background:var(--s1)"></span>预测干净动作块 x₀ 或终点 ẑ</li>
-          <li><span class="key" style="background:var(--neutral-mark)"></span>直接回归（参照）</li>
+          <li><span class="key" style="background:var(--s2)"></span>Predicts noise ε or velocity</li>
+          <li><span class="key" style="background:var(--s1)"></span>Predicts the clean chunk x₀ or endpoint ẑ</li>
+          <li><span class="key" style="background:var(--neutral-mark)"></span>Direct regression (reference)</li>
         </ul>
         <div class="hb">
-          <div class="hb-group">参照</div>
-          <div class="hb-row"><div class="hb-label">chunk MLP 回归</div><div class="hb-track"><div class="hb-bar ref" style="width:calc((100% - 3.5rem) * 2.31 / 22)" tabindex="0" data-tip="chunk MLP：2.31 cm"></div><span class="hb-val">2.3</span></div></div>
+          <div class="hb-group">Reference</div>
+          <div class="hb-row"><div class="hb-label">Chunk MLP regression</div><div class="hb-track"><div class="hb-bar ref" style="width:calc((100% - 3.5rem) * 2.31 / 22)" tabindex="0" data-tip="Chunk MLP: 2.31 cm"></div><span class="hb-val">2.3</span></div></div>
           <div class="hb-group">DDPM</div>
-          <div class="hb-row"><div class="hb-label">原实现（线性调度 + ε）</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 20.51 / 22)" tabindex="0" data-tip="DDPM 原实现：20.5 cm"></div><span class="hb-val">20.5</span></div></div>
-          <div class="hb-row"><div class="hb-label">余弦调度 + ε</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 21.18 / 22)" tabindex="0" data-tip="DDPM 余弦 + ε：21.2 cm"></div><span class="hb-val">21.2</span></div></div>
-          <div class="hb-row"><div class="hb-label">余弦调度 + x₀（修复后）</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.23 / 22)" tabindex="0" data-tip="DDPM 余弦 + x₀：3.2 cm"></div><span class="hb-val">3.2</span></div></div>
-          <div class="hb-group">流匹配</div>
-          <div class="hb-row"><div class="hb-label">CFM 预测速度</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 14.68 / 22)" tabindex="0" data-tip="CFM 速度预测：14.7 cm"></div><span class="hb-val">14.7</span></div></div>
-          <div class="hb-row"><div class="hb-label">CFM 预测终点</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.16 / 22)" tabindex="0" data-tip="CFM 终点预测：3.2 cm"></div><span class="hb-val">3.2</span></div></div>
-          <div class="hb-row"><div class="hb-label">FMCS 预测速度</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 14.45 / 22)" tabindex="0" data-tip="FMCS 速度预测：14.5 cm"></div><span class="hb-val">14.5</span></div></div>
-          <div class="hb-row"><div class="hb-label">FMCS 预测终点</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.79 / 22)" tabindex="0" data-tip="FMCS 终点预测：3.8 cm"></div><span class="hb-val">3.8</span></div></div>
+          <div class="hb-row"><div class="hb-label">Original (linear + ε)</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 20.51 / 22)" tabindex="0" data-tip="DDPM, original configuration: 20.5 cm"></div><span class="hb-val">20.5</span></div></div>
+          <div class="hb-row"><div class="hb-label">Cosine + ε</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 21.18 / 22)" tabindex="0" data-tip="DDPM, cosine + ε: 21.2 cm"></div><span class="hb-val">21.2</span></div></div>
+          <div class="hb-row"><div class="hb-label">Cosine + x₀ (upgraded)</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.23 / 22)" tabindex="0" data-tip="DDPM, cosine + x₀: 3.2 cm"></div><span class="hb-val">3.2</span></div></div>
+          <div class="hb-group">Flow matching</div>
+          <div class="hb-row"><div class="hb-label">CFM, velocity</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 14.68 / 22)" tabindex="0" data-tip="CFM predicting velocity: 14.7 cm"></div><span class="hb-val">14.7</span></div></div>
+          <div class="hb-row"><div class="hb-label">CFM, endpoint</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.16 / 22)" tabindex="0" data-tip="CFM predicting the endpoint: 3.2 cm"></div><span class="hb-val">3.2</span></div></div>
+          <div class="hb-row"><div class="hb-label">FMCS, velocity</div><div class="hb-track"><div class="hb-bar noise" style="width:calc((100% - 3.5rem) * 14.45 / 22)" tabindex="0" data-tip="FMCS predicting velocity: 14.5 cm"></div><span class="hb-val">14.5</span></div></div>
+          <div class="hb-row"><div class="hb-label">FMCS, endpoint</div><div class="hb-track"><div class="hb-bar clean" style="width:calc((100% - 3.5rem) * 3.79 / 22)" tabindex="0" data-tip="FMCS predicting the endpoint: 3.8 cm"></div><span class="hb-val">3.8</span></div></div>
         </div>
         <details>
-          <summary>查看数据表与 Stack 上的结果</summary>
+          <summary>Show data table and Stack results</summary>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>变体</th><th class="num">Reach 误差</th><th class="num">Stack 误差</th><th class="num">Stack 夹爪方向错误</th></tr></thead>
+              <thead><tr><th>Variant</th><th class="num">Reach error</th><th class="num">Stack error</th><th class="num">Stack gripper sign wrong</th></tr></thead>
               <tbody>
-                <tr><td>chunk MLP 回归</td><td class="num">2.3 cm</td><td class="num">24.8 cm<span class="sub">中位数 2.1 cm</span></td><td class="num">7.8%</td></tr>
-                <tr><td>DDPM 原实现（线性 + ε）</td><td class="num">20.5 cm</td><td class="num">—</td><td class="num">—</td></tr>
-                <tr><td>DDPM 余弦 + ε</td><td class="num">21.2 cm</td><td class="num">12.2 cm</td><td class="num">27.1%</td></tr>
-                <tr><td>DDPM 余弦 + x₀</td><td class="num">3.2 cm</td><td class="num">3.1 cm</td><td class="num">2.7%</td></tr>
-                <tr><td>FMCS 预测速度</td><td class="num">14.5 cm</td><td class="num">22.1 cm</td><td class="num">3.6%</td></tr>
-                <tr><td>FMCS 预测终点 + 盒内裁剪</td><td class="num">3.8 cm</td><td class="num">2.4 cm</td><td class="num">1.9%</td></tr>
+                <tr><td>Chunk MLP regression</td><td class="num">2.3 cm</td><td class="num">24.8 cm<span class="sub">median 2.1 cm</span></td><td class="num">7.8%</td></tr>
+                <tr><td>DDPM, original (linear + ε)</td><td class="num">20.5 cm</td><td class="num">—</td><td class="num">—</td></tr>
+                <tr><td>DDPM, cosine + ε</td><td class="num">21.2 cm</td><td class="num">12.2 cm</td><td class="num">27.1%</td></tr>
+                <tr><td>DDPM, cosine + x₀</td><td class="num">3.2 cm</td><td class="num">3.1 cm</td><td class="num">2.7%</td></tr>
+                <tr><td>FMCS, velocity</td><td class="num">14.5 cm</td><td class="num">22.1 cm</td><td class="num">3.6%</td></tr>
+                <tr><td>FMCS, endpoint with box clipping</td><td class="num">3.8 cm</td><td class="num">2.4 cm</td><td class="num">1.9%</td></tr>
               </tbody>
-              <caption>均为 24 条演示、训练 1800 步。Stack 上 chunk 回归的均值被少数离群样本拉高（中位数 2.1 cm），未裁剪的终点预测也有同样现象，加盒内裁剪后消失。来源：<code>results/offline_diag/</code>。</caption>
+              <caption>All with 24 demonstrations and 1,800 training steps. On Stack a few outliers inflate the mean of chunk regression (median 2.1 cm); unclipped endpoint prediction shows the same effect, which box clipping removes. Source: <code>results/offline_diag/</code>.</caption>
             </table>
           </div>
         </details>
       </figure>
 
-      <p>训练到 6000 步，ε-预测在 Reach 上仍有 8.3 cm 的误差。Stack 上 ε-预测的误差为 12.2 cm，夹爪开合方向有 27% 是错的；x₀-预测分别为 3.1 cm 和 2.7%。流匹配也是一样：预测速度时误差 14–15 cm，预测终点时 3–4 cm。这和 Li 与 He 在 2025 年的 <i>Back to Basics: Let Denoising Generative Models Denoise</i> 中的观察一致：网络容量有限时，预测干净数据比预测噪声或速度稳定得多。</p>
+      <p>After 6,000 training steps ε-prediction still has 8.3 cm of error on Reach. On Stack its error is 12.2 cm and the gripper direction is wrong 27% of the time, against 3.1 cm and 2.7% for x₀-prediction. Flow matching behaves the same way: 14–15 cm when predicting velocity and 3–4 cm when predicting the endpoint. This agrees with Li and He (2025), <i>Back to Basics: Let Denoising Generative Models Denoise</i>, who observe that with limited capacity, predicting clean data is far more stable than predicting noise or velocity.</p>
 
-      <h3 id="cause-exec">原因三：执行方式与采样细节</h3>
-      <p>原代码每个控制步都重新采样一个动作块，只执行其中第 1 个动作。现在改成 Diffusion Policy 的做法：执行动作块的前 8 步再重新采样，phase 变化时立即重新采样。同时补上了几项常规做法：x₀ 裁剪到演示范围、后验方差用 β̃、权重 EMA（0.995）。</p>
-      <p>学生看到的“一直在抖”，主要来自原因一和原因二：去噪器的输出接近随机，夹爪信号来回翻转。下表是 Stack（24 条演示）上的抖动指标。调度和执行方式都已修好、但仍用 ε-预测时（C 行），每回合夹爪翻转 83 次；换成 x₀-预测后降到 2.5 次，和 chunk MLP、状态机相当。</p>
+      <h3 id="cause-exec">3. Execution and sampling details</h3>
+      <p>The original configuration samples a new chunk at every control step and executes only its first action. The upgraded baseline follows Diffusion Policy: it executes the first 8 actions of a chunk before resampling, and resamples immediately when the phase changes. It also adds standard practice: x₀ clipped to the demonstration range, posterior variance β̃, and an exponential moving average of the weights (0.995).</p>
+      <p>The jitter seen in simulation comes mainly from settings 1 and 2: the denoiser outputs near-random actions and the gripper command flips back and forth. The table below gives jitter metrics on Stack with 24 demonstrations. With the schedule and execution already upgraded but ε-prediction kept (row C), the gripper flips 83 times per episode. With x₀-prediction this drops to 2.5, on par with the chunk MLP and the state machine.</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>方法</th><th class="num">指令位置变化</th><th class="num">夹爪翻转</th><th class="num">末端加速度</th></tr></thead>
+          <thead><tr><th>Method</th><th class="num">Command position change</th><th class="num">Gripper flips</th><th class="num">End-effector acceleration</th></tr></thead>
           <tbody>
-            <tr><td>DDPM 余弦 + ε，执行 8 步（C）</td><td class="num bad">0.124 m/步</td><td class="num bad">82.7 次/回合</td><td class="num bad">8.59 m/s²</td></tr>
-            <tr class="is-fixed"><td>DDPM 修复后（E）</td><td class="num">0.011 m/步</td><td class="num">2.5 次/回合</td><td class="num">0.73 m/s²</td></tr>
-            <tr><td>chunk MLP</td><td class="num">0.009 m/步</td><td class="num">2.2 次/回合</td><td class="num">0.83 m/s²</td></tr>
-            <tr><td>状态机 oc_fmcs</td><td class="num">0.004 m/步</td><td class="num">2.0 次/回合</td><td class="num">0.65 m/s²</td></tr>
+            <tr><td>DDPM, cosine + ε, 8-step execution (C)</td><td class="num bad">0.124 m/step</td><td class="num bad">82.7 per episode</td><td class="num bad">8.59 m/s²</td></tr>
+            <tr class="is-fixed"><td>DDPM, upgraded (E)</td><td class="num">0.011 m/step</td><td class="num">2.5 per episode</td><td class="num">0.73 m/s²</td></tr>
+            <tr><td>Chunk MLP</td><td class="num">0.009 m/step</td><td class="num">2.2 per episode</td><td class="num">0.83 m/s²</td></tr>
+            <tr><td>Scripted oc_fmcs</td><td class="num">0.004 m/step</td><td class="num">2.0 per episode</td><td class="num">0.65 m/s²</td></tr>
           </tbody>
-          <caption>原实现（A）的运行在加入抖动指标之前完成，没有这三列数据。我们也没有单独跑“x₀-预测但每步重采样”的组合，所以执行方式本身对抖动的贡献没有单独量化。</caption>
+          <caption>The run with the original configuration (A) finished before these metrics were added, so it has no values here. We did not run x₀-prediction with per-step resampling, so the contribution of the execution scheme alone is not measured.</caption>
         </table>
       </div>
 
-      <h3 id="ablation">逐步消融</h3>
+      <h3 id="ablation">Step-by-step ablation</h3>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>运行</th><th>调度</th><th>预测目标</th><th>x₀ 裁剪 + EMA</th><th class="num">执行步数</th><th class="num">训练步数</th><th class="num">叠放</th><th class="num">抬起</th></tr>
+            <tr><th>Run</th><th>Schedule</th><th>Target</th><th>x₀ clip + EMA</th><th class="num">Executed steps</th><th class="num">Training steps</th><th class="num">Stacked</th><th class="num">Lifted</th></tr>
           </thead>
           <tbody>
-            <tr><td>A 原实现</td><td>线性</td><td>ε</td><td>否</td><td class="num">1</td><td class="num">1800</td><td class="num">0%</td><td class="num">0%</td></tr>
-            <tr><td>B</td><td>余弦</td><td>ε</td><td>否</td><td class="num">1</td><td class="num">1800</td><td class="num">0%</td><td class="num">0%</td></tr>
-            <tr><td>C</td><td>余弦</td><td>ε</td><td>是</td><td class="num">8</td><td class="num">1800</td><td class="num">0%</td><td class="num">4.2%</td></tr>
-            <tr><td>D</td><td>余弦</td><td>ε</td><td>是</td><td class="num">8</td><td class="num">6000</td><td class="num">0%</td><td class="num">0%</td></tr>
-            <tr class="is-fixed"><td>E 修复后</td><td>余弦</td><td>x₀</td><td>是</td><td class="num">8</td><td class="num">1800</td><td class="num">8.3%</td><td class="num">16.7%</td></tr>
-            <tr class="is-fixed"><td>E′ 同配置重跑</td><td>余弦</td><td>x₀</td><td>是</td><td class="num">8</td><td class="num">1800</td><td class="num">4.2%</td><td class="num">16.7%</td></tr>
+            <tr><td>A original</td><td>linear</td><td>ε</td><td>no</td><td class="num">1</td><td class="num">1,800</td><td class="num">0%</td><td class="num">0%</td></tr>
+            <tr><td>B</td><td>cosine</td><td>ε</td><td>no</td><td class="num">1</td><td class="num">1,800</td><td class="num">0%</td><td class="num">0%</td></tr>
+            <tr><td>C</td><td>cosine</td><td>ε</td><td>yes</td><td class="num">8</td><td class="num">1,800</td><td class="num">0%</td><td class="num">4.2%</td></tr>
+            <tr><td>D</td><td>cosine</td><td>ε</td><td>yes</td><td class="num">8</td><td class="num">6,000</td><td class="num">0%</td><td class="num">0%</td></tr>
+            <tr class="is-fixed"><td>E upgraded</td><td>cosine</td><td>x₀</td><td>yes</td><td class="num">8</td><td class="num">1,800</td><td class="num">8.3%</td><td class="num">16.7%</td></tr>
+            <tr class="is-fixed"><td>E′ rerun of E</td><td>cosine</td><td>x₀</td><td>yes</td><td class="num">8</td><td class="num">1,800</td><td class="num">4.2%</td><td class="num">16.7%</td></tr>
           </tbody>
-          <caption>Stack，24 条演示，DDPM 不带 phase。Reach 上同样的顺序：A 为 0%（误差 17.4 cm），C 为 0%（20.8 cm），E 为 62.5%（3.7 cm）。</caption>
+          <caption>Stack, 24 demonstrations, DDPM without phase conditioning. Reach follows the same pattern: A 0% (17.4 cm error), C 0% (20.8 cm), E 62.5% (3.7 cm).</caption>
         </table>
       </div>
     </section>
 
     <section id="results" aria-labelledby="results-h">
-      <div class="section-tag">结果</div>
-      <h2 id="results-h">修复后的结果</h2>
+      <div class="section-tag">Results</div>
+      <h2 id="results-h">Results with the upgraded baseline</h2>
       <figure class="viz" aria-labelledby="ba-title">
-        <p class="viz-title" id="ba-title">DDPM 成功率：修复前与修复后</p>
-        <p class="viz-sub">Stack 为叠放成功率；两次同配置运行画成区间</p>
+        <p class="viz-title" id="ba-title">DDPM success rate, original and upgraded configuration</p>
+        <p class="viz-sub">Stack shows the stacking rate; two runs of the same configuration are drawn as a range</p>
         <ul class="legend">
-          <li><span class="key round" style="background:var(--surface);border:2px solid var(--neutral-mark)"></span>修复前</li>
-          <li><span class="key round" style="background:var(--s1)"></span>修复后</li>
-          <li><span class="key diamond" style="background:var(--s2)"></span>状态机 oc_fmcs（参照）</li>
+          <li><span class="key round" style="background:var(--surface);border:2px solid var(--neutral-mark)"></span>Original</li>
+          <li><span class="key round" style="background:var(--s1)"></span>Upgraded</li>
+          <li><span class="key diamond" style="background:var(--s2)"></span>Scripted oc_fmcs (reference)</li>
         </ul>
         <div class="db">
           <div class="db-row">
-            <div class="db-label">Reach<span>24 条演示</span></div>
+            <div class="db-label">Reach<span>24 demos</span></div>
             <div class="db-track">
               <div class="db-base"></div>
               <div class="db-link" style="left:0%;width:62.5%"></div>
-              <span class="mk before" style="left:0%" tabindex="0" data-tip="Reach 修复前：0%（误差 17.4 cm）"></span>
-              <span class="mk after" style="left:62.5%" tabindex="0" data-tip="Reach 修复后：62.5%（误差 3.7 cm）"></span>
-              <span class="mk ref" style="left:100%" tabindex="0" data-tip="Reach 状态机：100%"></span>
+              <span class="mk before" style="left:0%" tabindex="0" data-tip="Reach, original: 0% (17.4 cm error)"></span>
+              <span class="mk after" style="left:62.5%" tabindex="0" data-tip="Reach, upgraded: 62.5% (3.7 cm error)"></span>
+              <span class="mk ref" style="left:100%" tabindex="0" data-tip="Reach, scripted: 100%"></span>
               <span class="db-val" style="left:62.5%">62.5%</span>
               <span class="db-val ref-val right" style="left:100%">100%</span>
             </div>
           </div>
           <div class="db-row">
-            <div class="db-label">Lift<span>192 条演示</span></div>
+            <div class="db-label">Lift<span>192 demos</span></div>
             <div class="db-track">
               <div class="db-base"></div>
               <div class="db-link" style="left:0%;width:83.3%"></div>
-              <span class="mk before" style="left:0%" tabindex="0" data-tip="Lift 修复前：0%（方块没有离开桌面）"></span>
-              <span class="mk after" style="left:83.3%" tabindex="0" data-tip="Lift 修复后：83.3%"></span>
-              <span class="mk ref" style="left:97.9%" tabindex="0" data-tip="Lift 状态机：97.9%"></span>
+              <span class="mk before" style="left:0%" tabindex="0" data-tip="Lift, original: 0% (cube never leaves the table)"></span>
+              <span class="mk after" style="left:83.3%" tabindex="0" data-tip="Lift, upgraded: 83.3%"></span>
+              <span class="mk ref" style="left:97.9%" tabindex="0" data-tip="Lift, scripted: 97.9%"></span>
               <span class="db-val right" style="left:83.3%">83.3%</span>
               <span class="db-val ref-val right" style="left:100%">97.9%</span>
             </div>
           </div>
           <div class="db-row">
-            <div class="db-label">Stack<span>24 条演示</span></div>
+            <div class="db-label">Stack<span>24 demos</span></div>
             <div class="db-track">
               <div class="db-base"></div>
               <div class="db-range" style="left:4.2%;width:4.1%"></div>
-              <span class="mk before" style="left:0%" tabindex="0" data-tip="Stack（24 条）修复前：0%"></span>
-              <span class="mk after" style="left:8.3%" tabindex="0" data-tip="Stack（24 条）修复后：两次运行 4.2% 和 8.3%"></span>
-              <span class="mk ref" style="left:75%" tabindex="0" data-tip="Stack（24 条）状态机：4 次运行 70.8–79.2%"></span>
+              <span class="mk before" style="left:0%" tabindex="0" data-tip="Stack (24 demos), original: 0%"></span>
+              <span class="mk after" style="left:8.3%" tabindex="0" data-tip="Stack (24 demos), upgraded: two runs, 4.2% and 8.3%"></span>
+              <span class="mk ref" style="left:75%" tabindex="0" data-tip="Stack (24 demos), scripted: four runs, 70.8–79.2%"></span>
               <span class="db-val left" style="left:2%">4.2–8.3%</span>
               <span class="db-val ref-val" style="left:75%">70.8–79.2%</span>
             </div>
           </div>
           <div class="db-row">
-            <div class="db-label">Stack<span>192 条演示</span></div>
+            <div class="db-label">Stack<span>192 demos</span></div>
             <div class="db-track">
               <div class="db-base"></div>
-              <span class="db-missing">修复前未测</span>
+              <span class="db-missing">original not run</span>
               <div class="db-range" style="left:41.7%;width:8.3%"></div>
-              <span class="mk after" style="left:50%" tabindex="0" data-tip="Stack（192 条）修复后：两次运行 41.7% 和 50.0%"></span>
-              <span class="mk ref" style="left:64.6%" tabindex="0" data-tip="Stack（192 条）状态机：两次运行 62.5% 和 66.7%"></span>
+              <span class="mk after" style="left:50%" tabindex="0" data-tip="Stack (192 demos), upgraded: two runs, 41.7% and 50.0%"></span>
+              <span class="mk ref" style="left:64.6%" tabindex="0" data-tip="Stack (192 demos), scripted: two runs, 62.5% and 66.7%"></span>
               <span class="db-val right" style="left:50%">41.7–50.0%</span>
               <span class="db-val ref-val left" style="left:61%">62.5–66.7%</span>
             </div>
@@ -597,73 +585,73 @@ section[id], h3[id] { scroll-margin-top: 20px; }
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>任务</th><th class="num">演示数</th><th class="num">DDPM</th><th class="num">phase-DDPM</th><th class="num">chunk MLP</th><th class="num">状态机</th></tr>
+            <tr><th>Task</th><th class="num">Demos</th><th class="num">DDPM</th><th class="num">phase-DDPM</th><th class="num">Chunk MLP</th><th class="num">Scripted</th></tr>
           </thead>
           <tbody>
             <tr><td>Reach</td><td class="num">24</td><td class="num">0%<span class="arrow">→</span>62.5%</td><td class="num">0%<span class="arrow">→</span>50.0%</td><td class="num">70.8%</td><td class="num">100%</td></tr>
             <tr><td>Lift</td><td class="num">192</td><td class="num">0%<span class="arrow">→</span>83.3%</td><td class="num">0%<span class="arrow">→</span>79.2%</td><td class="num">10.4%</td><td class="num">97.9%</td></tr>
-            <tr><td>Stack 叠放</td><td class="num">24</td><td class="num">0%<span class="arrow">→</span>4.2–8.3%</td><td class="num">0%<span class="arrow">→</span>0–8.3%</td><td class="num">4.2%</td><td class="num">70.8–79.2%</td></tr>
-            <tr><td>Stack 抬起</td><td class="num">24</td><td class="num">0%<span class="arrow">→</span>16.7%</td><td class="num">0%<span class="arrow">→</span>33.3–41.7%</td><td class="num">20.8%</td><td class="num">75.0–91.7%</td></tr>
-            <tr><td>Stack 叠放</td><td class="num">192</td><td class="num">41.7–50.0%</td><td class="num">0%</td><td class="num">0%</td><td class="num">62.5–66.7%</td></tr>
+            <tr><td>Stack, stacked</td><td class="num">24</td><td class="num">0%<span class="arrow">→</span>4.2–8.3%</td><td class="num">0%<span class="arrow">→</span>0–8.3%</td><td class="num">4.2%</td><td class="num">70.8–79.2%</td></tr>
+            <tr><td>Stack, lifted</td><td class="num">24</td><td class="num">0%<span class="arrow">→</span>16.7%</td><td class="num">0%<span class="arrow">→</span>33.3–41.7%</td><td class="num">20.8%</td><td class="num">75.0–91.7%</td></tr>
+            <tr><td>Stack, stacked</td><td class="num">192</td><td class="num">41.7–50.0%</td><td class="num">0%</td><td class="num">0%</td><td class="num">62.5–66.7%</td></tr>
           </tbody>
-          <caption>Reach 与 Stack 用 24 个环境评估（一个环境 4.2 个百分点），Lift 用 48 个（2.1 个百分点）。区间为同配置的多次运行。Lift 的“修复前”保留了 x₀-预测，只恢复了旧调度、无裁剪、无 EMA 和逐步重采样，没有单独重跑完全原始的 ε 版本。Lift 上 phase BC 和 phase chunk MLP 分别为 97.9% 和 85.4%。</caption>
+          <caption>Arrows go from the original to the upgraded configuration. Reach and Stack are evaluated on 24 environments (4.2 points each), Lift on 48 (2.1 points each). Ranges cover repeated runs of the same configuration. The original-configuration Lift run kept x₀-prediction and restored only the linear schedule, no clipping, no EMA and per-step resampling; the fully original ε version was not rerun on Lift. On Lift, phase BC reaches 97.9% and phase chunk MLP 85.4%.</caption>
         </table>
       </div>
-      <p>状态机自身也有波动。同一评估种子下 Stack 跑了 6 次，状态机的成功率依次为 75.0%、79.2%、70.8%、66.7%、75.0%、62.5%，来自 GPU 上 PhysX 的非确定性。论文中 75% 与 79.2% 两个批次的差别在这个范围以内。</p>
+      <p>The state machine itself varies as well. Stack was run 6 times with the same evaluation seed, and the state machine succeeded in 75.0%, 79.2%, 70.8%, 66.7%, 75.0% and 62.5% of episodes because of PhysX nondeterminism on the GPU. The paper's 75% and 79.2% batches differ by less than this spread.</p>
     </section>
 
     <section id="paper" aria-labelledby="paper-h">
-      <div class="section-tag">论文</div>
-      <h2 id="paper-h">对论文的影响</h2>
+      <div class="section-tag">Paper</div>
+      <h2 id="paper-h">Implications for the paper</h2>
       <ul>
-        <li>表 VI 中两行 DDPM 的 0% 来自实现问题，需要换成修复后的数字。在论文的数据量（24 条演示）下，修复后的 DDPM 为 4.2–8.3%，和 OC-FMCS 的排序不变。</li>
-        <li>演示增加到 192 条时，不带 atlas 的 DDPM 叠放率达到 41.7–50.0%，接近状态机的 62.5–66.7%。“全局先验无法提供接触拓扑”一类的表述需要加上数据量的前提，或者改写。</li>
-        <li>机器人部分应写明 OC-FMCS 的实现方式是 atlas 加解析局部场，再由 IK 执行。如果要宣称局部场是学出来的，需要报告 <code>oc_fmcs_learned</code> 这类结果，并说明门控条件。</li>
-        <li>机器人结果建议报告多次运行的均值和范围。24 个环境下，相差一两个环境的结果都在噪声以内。</li>
+        <li>The two DDPM rows of Table VI should use the upgraded baseline. At the paper's data size (24 demonstrations) the upgraded DDPM scores 4.2–8.3%, so its ranking against OC-FMCS does not change.</li>
+        <li>With 192 demonstrations, DDPM without an atlas stacks in 41.7–50.0% of episodes, close to the state machine's 62.5–66.7%. Statements that a global prior cannot supply contact topology need a data-size qualifier or a rewrite.</li>
+        <li>The robot section should state that OC-FMCS is implemented as the atlas plus an analytic local field executed by IK. Claiming a learned local field requires results such as <code>oc_fmcs_learned</code>, together with a description of the gate.</li>
+        <li>Robot results should report the mean and range over several runs. With 24 environments, a difference of one or two environments is within noise.</li>
       </ul>
     </section>
 
     <section id="code" aria-labelledby="code-h">
-      <div class="section-tag">代码</div>
-      <h2 id="code-h">代码与复现</h2>
-      <p>分支 <code>isaac-ddpm-fix</code> 相对 <code>main</code> 的改动：</p>
+      <div class="section-tag">Code</div>
+      <h2 id="code-h">Code and reproduction</h2>
+      <p>Changes on branch <a href="https://github.com/ContinuumCoder/Flow-Matching-in-Convex-Invariant-Set/tree/isaac-ddpm-fix"><code>isaac-ddpm-fix</code></a> relative to <code>main</code>:</p>
       <ul class="filelist">
-        <li><code>experiments/isaaclab_multitask_policy_baselines.py</code><span>DDPM 修复；新方法 oc_fmcs_learned；Stack 的 NUM_PHASES 从 8 改为 9（原先 release 和 retreat 共用一个 one-hot）；抖动指标；新参数 <code>--demo-episodes</code>、<code>--dump-demos</code>、<code>--stub-dex-retargeting</code>。</span></li>
-        <li><code>experiments/isaaclab_lift_policy_baselines.py</code><span>DDPM 修复；采集函数加上 <code>@torch.inference_mode()</code>，修复新版 Isaac Lab 下第二轮采集报错后卡在 <code>simulation_app.close()</code> 的问题。</span></li>
-        <li><code>experiments/offline_policy_diag.py</code><span>新增。读取 <code>--dump-demos</code> 导出的演示，不开仿真，离线比较各方法第一步动作和整个动作块的误差。</span></li>
-        <li><code>README.md</code>、<code>experiments/README.md</code>、<code>docs/REPRODUCIBILITY.md</code><span>Stack 命令里的 <code>--task</code>、<code>--out-dir</code> 改为脚本实际接受的 <code>--scenario</code>、<code>--out</code>。</span></li>
-        <li><code>docs/isaac_ddpm_fix/</code><span>本页、复现脚本，以及所有运行的 <code>metrics.json</code>。</span></li>
+        <li><code>experiments/isaaclab_multitask_policy_baselines.py</code><span>Upgraded DDPM baseline; new method oc_fmcs_learned; Stack uses 9 phases instead of 8 (release and retreat used to share one one-hot); jitter metrics; new flags <code>--demo-episodes</code>, <code>--dump-demos</code> and <code>--stub-dex-retargeting</code>.</span></li>
+        <li><code>experiments/isaaclab_lift_policy_baselines.py</code><span>Upgraded DDPM baseline. Demonstration collection runs under <code>@torch.inference_mode()</code>, which recent Isaac Lab releases need for the second collection episode.</span></li>
+        <li><code>experiments/offline_policy_diag.py</code><span>New. Loads demonstrations exported with <code>--dump-demos</code> and, without the simulator, compares each method's error on the first action and on the whole chunk.</span></li>
+        <li><code>README.md</code>, <code>experiments/README.md</code>, <code>docs/REPRODUCIBILITY.md</code><span>The Stack command uses <code>--scenario</code> and <code>--out</code>, the flags the script accepts.</span></li>
+        <li><code>docs/isaac_ddpm_fix/</code><span>This page, the rerun script and the <code>metrics.json</code> of every run.</span></li>
       </ul>
 
-      <h3>新参数与默认值</h3>
-      <p>默认值就是修复后的配置。传入右列的参数可以恢复原来的行为。</p>
+      <h3>New flags and defaults</h3>
+      <p>The defaults are the upgraded configuration. Pass the value in the right-hand column to restore the original configuration.</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>参数</th><th>默认值（修复后）</th><th>恢复原行为</th></tr></thead>
+          <thead><tr><th>Flag</th><th>Default (upgraded)</th><th>Original configuration</th></tr></thead>
           <tbody>
             <tr><td><code>--diffusion-schedule</code></td><td>cosine</td><td><code>linear_legacy</code></td></tr>
             <tr><td><code>--diffusion-pred</code></td><td>x0</td><td><code>eps</code></td></tr>
-            <tr><td><code>--diffusion-clip</code></td><td>开</td><td><code>--no-diffusion-clip</code></td></tr>
+            <tr><td><code>--diffusion-clip</code></td><td>on</td><td><code>--no-diffusion-clip</code></td></tr>
             <tr><td><code>--ema-decay</code></td><td>0.995</td><td><code>0</code></td></tr>
             <tr><td><code>--exec-steps</code></td><td>8</td><td><code>1</code></td></tr>
-            <tr><td><code>--demo-episodes</code></td><td>1（每个环境采 1 条演示，与原版相同）</td><td>—</td></tr>
-            <tr><td><code>--fm-param</code>（oc_fmcs_learned）</td><td>x，预测终点</td><td><code>v</code> 为预测速度</td></tr>
-            <tr><td><code>--fm-clip-endpoint</code>（oc_fmcs_learned）</td><td>开，终点裁剪到 chart 盒内</td><td><code>--no-fm-clip-endpoint</code></td></tr>
+            <tr><td><code>--demo-episodes</code></td><td>1 (one demonstration per environment, as before)</td><td>—</td></tr>
+            <tr><td><code>--fm-param</code> (oc_fmcs_learned)</td><td>x, predicts the endpoint</td><td><code>v</code> predicts the velocity</td></tr>
+            <tr><td><code>--fm-clip-endpoint</code> (oc_fmcs_learned)</td><td>on, clips the endpoint to the chart box</td><td><code>--no-fm-clip-endpoint</code></td></tr>
           </tbody>
         </table>
       </div>
 
-      <h3>复现</h3>
-      <p>在仓库根目录运行。<code>main</code> 跑上面的主结果，<code>ablation</code> 跑消融；每个运行是一个独立的 Isaac 进程，显存约 2 GB。</p>
+      <h3>Reproduction</h3>
+      <p>Run from the repository root. <code>main</code> produces the main results and <code>ablation</code> the ablation. Each run is a separate Isaac process using about 2 GB of GPU memory.</p>
       <div class="codebox">
-        <button class="copy" type="button" data-copy="cmd-all" id="copy-all">复制</button>
+        <button class="copy" type="button" data-copy="cmd-all" id="copy-all">Copy</button>
         <pre id="cmd-all"><code>export ISAACLAB_PYTHON=&lt;isaac-lab-python&gt;
 bash docs/isaac_ddpm_fix/run_isaac_ddpm_fix.sh main
 bash docs/isaac_ddpm_fix/run_isaac_ddpm_fix.sh ablation</code></pre>
       </div>
-      <p>单独跑一次 Stack：</p>
+      <p>A single Stack run:</p>
       <div class="codebox">
-        <button class="copy" type="button" data-copy="cmd-stack" id="copy-stack">复制</button>
+        <button class="copy" type="button" data-copy="cmd-stack" id="copy-stack">Copy</button>
         <pre id="cmd-stack"><code>"$ISAACLAB_PYTHON" experiments/isaaclab_multitask_policy_baselines.py \
   --scenario stack --num-envs 24 --steps 240 --hidden-dim 256 \
   --diffusion-train-steps 1800 --fm-train-steps 1800 \
@@ -672,19 +660,19 @@ bash docs/isaac_ddpm_fix/run_isaac_ddpm_fix.sh ablation</code></pre>
   --eval-methods diffusion_policy,phase_diffusion_policy,oc_fmcs,oc_fmcs_learned \
   --device cuda:0 --headless --out results/my_run/metrics.json</code></pre>
       </div>
-      <p>离线诊断：先导出演示，再在普通 Python 环境里运行。</p>
+      <p>Offline diagnosis: export demonstrations first, then run the diagnosis in any Python environment with PyTorch.</p>
       <div class="codebox">
-        <button class="copy" type="button" data-copy="cmd-diag" id="copy-diag">复制</button>
+        <button class="copy" type="button" data-copy="cmd-diag" id="copy-diag">Copy</button>
         <pre id="cmd-diag"><code>"$ISAACLAB_PYTHON" experiments/isaaclab_multitask_policy_baselines.py \
   --scenario reach --steps 120 --num-envs 24 --demo-episodes 8 \
   --dump-demos dumps/reach_e8.pt --device cuda:0 --headless
 python experiments/offline_policy_diag.py dumps/reach_e8.pt --episodes 1 8</code></pre>
       </div>
-      <p class="note">如果 Stack 在 “module compiled using NumPy 1.x” 警告之后卡住不动，是 pinocchio 按 NumPy 1.x 编译、环境里却是 NumPy 2.x。加上 <code>--stub-dex-retargeting</code>（复现脚本里用 <code>EXTRA=--stub-dex-retargeting</code>）即可，这个开关只替换评估中用不到的遥操作模块。</p>
+      <p class="note">If Stack hangs after a “module compiled using NumPy 1.x” warning, pinocchio was built against NumPy 1.x while the environment has NumPy 2.x. Add <code>--stub-dex-retargeting</code> (<code>EXTRA=--stub-dex-retargeting</code> for the rerun script). It only replaces teleoperation modules that evaluation never uses.</p>
     </section>
 
     <footer>
-      <p>结果目录 <code>docs/isaac_ddpm_fix/results/</code> 中的名称与正文对应：A = <code>*_legacy</code>，B = <code>stack_24demos_cosine_only</code>，C = <code>*_cosine_eps</code>，D = <code>stack_24demos_cosine_eps_6000steps</code>，E = <code>stack_24demos_fixed_noclamp</code>，E′ = <code>stack_24demos_fixed</code>。带 <code>noclamp</code> 的运行中 DDPM 配置与修复后相同，只是 oc_fmcs_learned 还没有终点裁剪；消融目录里的 oc_fmcs_learned 是早期的速度预测版本，以 <code>*_fixed</code> 为准。</p>
+      <p>Result folders in <a href="https://github.com/ContinuumCoder/Flow-Matching-in-Convex-Invariant-Set/tree/isaac-ddpm-fix/docs/isaac_ddpm_fix/results"><code>docs/isaac_ddpm_fix/results/</code></a> map to the runs above: A = <code>*_legacy</code>, B = <code>stack_24demos_cosine_only</code>, C = <code>*_cosine_eps</code>, D = <code>stack_24demos_cosine_eps_6000steps</code>, E = <code>stack_24demos_fixed_noclamp</code>, E′ = <code>stack_24demos_fixed</code>. In the <code>noclamp</code> runs DDPM already uses the upgraded configuration and only oc_fmcs_learned lacks endpoint clipping. In the ablation folders oc_fmcs_learned is an earlier velocity-predicting version; use the <code>*_fixed</code> folders for it.</p>
     </footer>
   </main>
 </div>
@@ -727,12 +715,12 @@ python experiments/offline_policy_diag.py dumps/reach_e8.pt --episodes 1 8</code
         var sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(range);
-        btn.textContent = "已选中，按 ⌘C 复制";
+        btn.textContent = "Selected, press Ctrl/⌘ C";
       }
       try {
         navigator.clipboard.writeText(text).then(function () {
-          btn.textContent = "已复制";
-          setTimeout(function () { btn.textContent = "复制"; }, 1600);
+          btn.textContent = "Copied";
+          setTimeout(function () { btn.textContent = "Copy"; }, 1600);
         }, selectFallback);
       } catch (err) { selectFallback(); }
     });
